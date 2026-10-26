@@ -1,3 +1,4 @@
+mod data_files;
 mod sync_files;
 
 use tauri_plugin_sql::{Migration, MigrationKind};
@@ -30,7 +31,16 @@ pub fn run() {
                 .add_migrations("sqlite:identity.db", migrations())
                 .build(),
         )
-        .invoke_handler(tauri::generate_handler![sync_files::sync_read_peers, sync_files::sync_write_own])
+        .invoke_handler(tauri::generate_handler![
+            sync_files::sync_read_peers,
+            sync_files::sync_write_own,
+            data_files::backup_write,
+            data_files::backup_list,
+            data_files::backup_read,
+            data_files::export_write,
+            data_files::import_read,
+            data_files::import_candidates,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Identity");
 }

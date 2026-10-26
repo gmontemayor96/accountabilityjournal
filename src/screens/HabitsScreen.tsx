@@ -1,11 +1,14 @@
 import { Icons } from "../components/Icons";
 import type { Habit } from "../domain/model";
 import { describeSchedule } from "../domain/schedule";
+import { describeStreak } from "../domain/streaks";
 import { getHabitType } from "../habitTypes";
+import { useStreaks } from "../hooks/useStreaks";
 import { useStore } from "../store";
 
 export function HabitsScreen({ onEditHabit }: { onEditHabit: (h?: Habit) => void }) {
   const { habits, tags, setArchived } = useStore();
+  const streaks = useStreaks();
   const active = habits.filter((h) => !h.archivedAt);
   const archived = habits.filter((h) => h.archivedAt);
   const tag = (id: string) => tags.find((t) => t.id === id);
@@ -41,6 +44,7 @@ export function HabitsScreen({ onEditHabit }: { onEditHabit: (h?: Habit) => void
                     <span key={t!.id} className="chip"><span className="dot" style={{ background: t!.color }} />{t!.name}</span>
                   ))}
                 </div>
+                {streaks[h.id] && <div className="hint">Streak: {describeStreak(streaks[h.id])}</div>}
                 {h.fields.length > 0 && <div className="hint">Also logs: {h.fields.map((f) => f.label).join(", ")}</div>}
               </article>
             );

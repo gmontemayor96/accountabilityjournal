@@ -17,7 +17,7 @@ const NAV: { view: View; label: string; icon: keyof typeof Icons }[] = [
   { view: "calendar", label: "Calendar", icon: "calendar" },
   { view: "journal", label: "Journal", icon: "journal" },
   { view: "tags", label: "Tags", icon: "tags" },
-  { view: "sync", label: "Sync", icon: "sync" },
+  { view: "sync", label: "Data", icon: "sync" },
 ];
 
 export default function App() {
