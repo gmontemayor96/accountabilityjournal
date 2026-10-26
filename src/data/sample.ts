@@ -71,14 +71,21 @@ export function sampleData(today = todayKey()): { habits: Habit[]; tags: Tag[]; 
     task("t_plants", "Water the plants", addDays(today, -2), { doneAt: `${addDays(today, -2)}T18:00:00.000Z` }),
   ];
   // Example Google Calendar events, as the desktop app would cache them.
-  const ev = (id: string, title: string, date: string, startTime: string | null, endTime: string | null, endDate = date) =>
-    ({ id, title, startDate: date, startTime, endDate, endTime });
-  const events = [
-    ev("g1", "Team standup", today, "09:30", "09:45"),
-    ev("g2", "Lunch with Sam", today, "12:30", "13:30"),
-    ev("g3", "Weekend away", addDays(today, 4), null, null, addDays(today, 6)),
-    ev("g4", "Dentist", addDays(today, 2), "15:00", "15:45"),
+  const calendars = [
+    { id: "me@example.com", name: "Personal", color: "#039be5", primary: true, selected: true },
+    { id: "work@example.com", name: "Work", color: "#33b679", primary: false, selected: true },
+    { id: "holidays", name: "Holidays", color: "#e67c73", primary: false, selected: false },
   ];
-  const settings = { "google.events": JSON.stringify({ fetchedAt: now, events }) };
+  const ev = (id: string, calendarId: string, title: string, date: string, startTime: string | null, endTime: string | null, endDate = date) =>
+    ({ id, title, startDate: date, startTime, endDate, endTime, calendarId });
+  const events = [
+    ev("g1", "work@example.com", "Team standup", today, "09:30", "09:45"),
+    ev("g2", "me@example.com", "Lunch with Sam", today, "12:30", "13:30"),
+    ev("g3", "me@example.com", "Weekend away", addDays(today, 4), null, null, addDays(today, 6)),
+    ev("g4", "me@example.com", "Dentist", addDays(today, 2), "15:00", "15:45"),
+    ev("g5", "work@example.com", "Quarterly review", addDays(today, 1), "14:00", "15:00"),
+    ev("g6", "holidays", "Public holiday", addDays(today, 7), null, null),
+  ];
+  const settings = { "google.events": JSON.stringify({ fetchedAt: now, events, calendars }) };
   return { habits, tags, days, entries, tasks, settings };
 }

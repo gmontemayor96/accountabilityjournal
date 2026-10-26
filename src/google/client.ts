@@ -1,6 +1,6 @@
 import type { Repo } from "../data/repo";
 import type { Task } from "../domain/model";
-import { eventFingerprint, eventIdFor, fromGoogle, planPush, taskToEvent, type CalEvent, type EventCache, type GoogleEvent } from "./events";
+import { eventFingerprint, eventIdFor, fromGoogle, planPush, taskToEvent, type CalEvent, type CalInfo, type EventCache, type GoogleEvent } from "./events";
 
 export const G = {
   clientId: "google.clientId",
@@ -13,13 +13,18 @@ export const G = {
   events: "google.events",
 } as const;
 
-// Create and manage the app's own calendar; read (never change) the user's events.
-const SCOPES = "https://www.googleapis.com/auth/calendar.app.created https://www.googleapis.com/auth/calendar.events.readonly";
+// Create and manage the app's own calendar; read (never change) the user's calendar list and events.
+const SCOPES = [
+  "https://www.googleapis.com/auth/calendar.app.created",
+  "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+  "https://www.googleapis.com/auth/calendar.events.readonly",
+].join(" ");
 const CALENDAR_NAME = "Identity";
 const API = "https://www.googleapis.com/calendar/v3";
 
+let http: Promise<typeof import("@tauri-apps/plugin-http")> | undefined;
 async function httpFetch(url: string, init?: RequestInit): Promise<Response> {
-  const { fetch } = await import("@tauri-apps/plugin-http");
+  const { fetch } = await (http ??= import("@tauri-apps/plugin-http"));
   return fetch(url, init);
 }
 
@@ -97,7 +102,7 @@ async function api<T>(repo: Repo, method: string, path: string, body?: unknown):
   const data = (text ? JSON.parse(text) : {}) as T;
   if (!res.ok && res.status !== 404 && res.status !== 410) {
     const msg = (data as { error?: { message?: string } }).error?.message ?? String(res.status);
-    throw new Error(`Google Calendar: ${msg}`);
+    throw Object.assign(new Error(`Google Calendar: ${msg}`), { status: res.status });
   }
   return { status: res.status, data };
 }
@@ -133,22 +138,59 @@ async function pushTasks(repo: Repo, tasks: Task[]): Promise<number> {
   return upsert.length + remove.length;
 }
 
-/** The user's primary-calendar events from 30 days back to 120 days ahead. */
-async function fetchEvents(repo: Repo): Promise<CalEvent[]> {
+interface GoogleCalendar { id: string; summary?: string; summaryOverride?: string; backgroundColor?: string; primary?: boolean; selected?: boolean; hidden?: boolean }
+
+/**
+ * The calendars in the user's Google sidebar, without the app's own (its tasks already show as tasks).
+ * Null when the sign-in has no calendar-list access (connected before it was asked for).
+ */
+async function fetchCalendars(repo: Repo, own: string): Promise<CalInfo[] | null> {
+  const out: CalInfo[] = [];
+  let page = "";
+  try {
+    do {
+      const qs = new URLSearchParams({ maxResults: "250", ...(page ? { pageToken: page } : {}) });
+      const { data } = await api<{ items?: GoogleCalendar[]; nextPageToken?: string }>(repo, "GET", `/users/me/calendarList?${qs}`);
+      for (const c of data.items ?? []) {
+        if (c.id === own || c.hidden) continue;
+        out.push({ id: c.id, name: c.summaryOverride || c.summary || c.id, color: c.backgroundColor || "#9e9e9e", primary: !!c.primary, selected: c.selected !== false });
+      }
+      page = data.nextPageToken ?? "";
+    } while (page);
+  } catch (e) {
+    if ((e as { status?: number }).status === 403) return null;
+    throw e;
+  }
+  // Primary first, like Google's sidebar; the rest in Google's order.
+  return out.sort((a, b) => Number(b.primary) - Number(a.primary));
+}
+
+/** One calendar's events from 30 days back to 120 days ahead. */
+async function fetchEvents(repo: Repo, calendarId: string): Promise<CalEvent[]> {
   const from = new Date(Date.now() - 30 * 86_400_000).toISOString();
   const to = new Date(Date.now() + 120 * 86_400_000).toISOString();
   const out: CalEvent[] = [];
   let page = "";
   do {
     const qs = new URLSearchParams({ timeMin: from, timeMax: to, singleEvents: "true", orderBy: "startTime", maxResults: "2500", ...(page ? { pageToken: page } : {}) });
-    const { data } = await api<{ items?: GoogleEvent[]; nextPageToken?: string }>(repo, "GET", `/calendars/primary/events?${qs}`);
+    const { status, data } = await api<{ items?: GoogleEvent[]; nextPageToken?: string }>(repo, "GET", `/calendars/${encodeURIComponent(calendarId)}/events?${qs}`);
+    if (status === 404 || status === 410) return out; // removed since the list was read
     for (const g of data.items ?? []) {
-      const e = fromGoogle(g);
+      const e = fromGoogle(g, calendarId);
       if (e) out.push(e);
     }
     page = data.nextPageToken ?? "";
   } while (page);
   return out;
+}
+
+/** Every calendar's events, or just the primary calendar's when the calendar list can't be read. */
+async function fetchAll(repo: Repo): Promise<Omit<EventCache, "fetchedAt">> {
+  const own = (await repo.getSetting(G.calendarId)) ?? "";
+  const calendars = await fetchCalendars(repo, own);
+  if (!calendars) return { events: await fetchEvents(repo, "primary"), calendars: [], primaryOnly: true };
+  const events = (await Promise.all(calendars.map((c) => fetchEvents(repo, c.id)))).flat();
+  return { events, calendars };
 }
 
 export async function loadEventCache(repo: Repo): Promise<EventCache | null> {
@@ -162,11 +204,12 @@ export async function loadEventCache(repo: Repo): Promise<EventCache | null> {
 /** One round: send changed tasks to Google, then refresh the cached events. */
 export async function googleSync(repo: Repo, tasks: Task[]): Promise<{ pushed: number; events: EventCache }> {
   const pushed = await pushTasks(repo, tasks);
-  const fresh = await fetchEvents(repo);
+  const fresh = await fetchAll(repo);
   const cached = await loadEventCache(repo);
   // Only a real change gets a new timestamp, so the sync file isn't rewritten every round.
-  if (cached && JSON.stringify(cached.events) === JSON.stringify(fresh)) return { pushed, events: cached };
-  const events: EventCache = { fetchedAt: new Date().toISOString(), events: fresh };
+  const same = (c: Omit<EventCache, "fetchedAt">) => JSON.stringify([c.events, c.calendars ?? [], !!c.primaryOnly]);
+  if (cached && same(cached) === same(fresh)) return { pushed, events: cached };
+  const events: EventCache = { fetchedAt: new Date().toISOString(), ...fresh };
   await repo.setSetting(G.events, JSON.stringify(events));
   return { pushed, events };
 }
