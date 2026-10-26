@@ -1,0 +1,57 @@
+name: Build Android app
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - run: npm test
+
+      # Signs with the keystore in the ANDROID_KEYSTORE / ANDROID_KEYSTORE_PASSWORD secrets, so each new
+      # APK installs over the last one. Without them a one-off key is made, and updating means reinstalling.
+      - name: Set up signing
+        env:
+          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          store="$RUNNER_TEMP/identity.jks"
+          if [ -n "$ANDROID_KEYSTORE" ]; then
+            echo "$ANDROID_KEYSTORE" | base64 -d > "$store"
+            password="$ANDROID_KEYSTORE_PASSWORD"
+          else
+            echo "::warning::No ANDROID_KEYSTORE secret: signing with a one-off key. Installing this APK over an earlier one will fail."
+            password="one-off-$GITHUB_RUN_ID"
+            keytool -genkeypair -keystore "$store" -alias identity -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$password" -keypass "$password" -dname "CN=Identity"
+          fi
+          printf 'keyAlias=identity\npassword=%s\nstoreFile=%s\n' "$password" "$store" > src-tauri/gen/android/keystore.properties
+
+      - name: Build APK
+        run: |
+          export NDK_HOME="$ANDROID_NDK_LATEST_HOME"
+          npx tauri android build --apk --target aarch64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: identity-android-apk
+          path: src-tauri/gen/android/app/build/outputs/apk/**/release/*.apk

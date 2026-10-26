@@ -1,19 +1,7 @@
-import { readFileSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Habit } from "../domain/model";
-import { SqliteRepo, type SqlDriver } from "./sqliteRepo";
-
-// Runs the real migration against an in-memory SQLite database (Node's built-in driver).
-function memoryDriver(): SqlDriver {
-  const db = new DatabaseSync(":memory:");
-  db.exec(readFileSync(new URL("../../src-tauri/migrations/001_init.sql", import.meta.url), "utf8"));
-  type P = null | number | string;
-  return {
-    execute: async (sql, params = []) => { db.prepare(sql).run(...(params as P[])); },
-    select: async <T,>(sql: string, params: unknown[] = []) => db.prepare(sql).all(...(params as P[])) as T[],
-  };
-}
+import { memoryDriver } from "../test/sqlite";
+import { SqliteRepo } from "./sqliteRepo";
 
 const run: Habit = {
   id: "h_run", name: "Morning run", identity: "I am a runner.", color: "#E07A5F", type: "duration", target: 30, unit: "min",

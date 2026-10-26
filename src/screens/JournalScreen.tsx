@@ -8,7 +8,7 @@ import { useStore } from "../store";
 const WINDOW = 60; // days loaded per "Show older" step
 
 export function JournalScreen() {
-  const { repo, habits, tags, openDay } = useStore();
+  const { repo, habits, tags, openDay, dataVersion } = useStore();
   const today = todayKey();
   const [from, setFrom] = useState(() => addDays(today, -(WINDOW - 1)));
   const [earliest, setEarliest] = useState<string | null>(null);
@@ -19,7 +19,7 @@ export function JournalScreen() {
 
   useEffect(() => {
     repo?.earliestDate().then(setEarliest);
-  }, [repo]);
+  }, [repo, dataVersion]);
   useEffect(() => {
     let live = true;
     repo?.loadRange(from, today).then((r) => {
@@ -28,7 +28,7 @@ export function JournalScreen() {
       setEntries(entriesByDate(r.entries));
     });
     return () => { live = false; };
-  }, [repo, from, today]);
+  }, [repo, from, today, dataVersion]);
 
   const habitById = new Map(habits.map((h) => [h.id, h]));
   const tag = (id: string) => tags.find((t) => t.id === id);

@@ -12,7 +12,7 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 const WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export function CalendarScreen() {
-  const { repo, habits, tags, openDay } = useStore();
+  const { repo, habits, tags, openDay, dataVersion } = useStore();
   const today = todayKey();
   const [month, setMonth] = useState(() => {
     const d = new Date();
@@ -30,7 +30,7 @@ export function CalendarScreen() {
       if (live) setData({ days: Object.fromEntries(days.map((d) => [d.date, d])), entries: entriesByDate(entries) });
     });
     return () => { live = false; };
-  }, [repo, grid]);
+  }, [repo, grid, dataVersion]);
 
   const active = habits.filter((h) => !h.archivedAt);
   const focus = active.find((h) => h.id === focusId);

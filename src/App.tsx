@@ -7,6 +7,7 @@ import { DayScreen } from "./screens/DayScreen";
 import { HabitsScreen } from "./screens/HabitsScreen";
 import { CalendarScreen } from "./screens/CalendarScreen";
 import { JournalScreen } from "./screens/JournalScreen";
+import { SyncScreen } from "./screens/SyncScreen";
 import { TagsScreen } from "./screens/TagsScreen";
 import { blankHabit, useStore, type View } from "./store";
 
@@ -16,6 +17,7 @@ const NAV: { view: View; label: string; icon: keyof typeof Icons }[] = [
   { view: "calendar", label: "Calendar", icon: "calendar" },
   { view: "journal", label: "Journal", icon: "journal" },
   { view: "tags", label: "Tags", icon: "tags" },
+  { view: "sync", label: "Sync", icon: "sync" },
 ];
 
 export default function App() {
@@ -56,6 +58,7 @@ export default function App() {
         {status === "ready" && view === "calendar" && <CalendarScreen />}
         {status === "ready" && view === "journal" && <JournalScreen />}
         {status === "ready" && view === "tags" && <TagsScreen />}
+        {status === "ready" && view === "sync" && <SyncScreen />}
       </main>
       {editing && <HabitEditor habit={editing} onClose={() => setEditing(null)} />}
     </div>
