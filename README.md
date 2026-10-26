@@ -29,7 +29,34 @@ Every push builds Windows installers on GitHub Actions. Open the latest run unde
 
 On Android: open **Actions → Build Android app**, download **identity-android-apk**, unzip it on your phone and open the `.apk` (allow installing from your browser or file manager when asked).
 
-APKs are signed with the keystore in the `ANDROID_KEYSTORE` (base64 of a `.jks` with key alias `identity`) and `ANDROID_KEYSTORE_PASSWORD` repository secrets, so a new APK installs over the old one. Without those secrets each build gets a one-off key, and updating means uninstalling first (sync brings your data back).
+### Signing the Android app (so updates install over the old version)
+
+Android only installs an update over an existing app when both are signed with the same key. Without your own key, each build gets a one-off key, and updating means uninstalling first (sync brings your data back). Setting one up takes about five minutes and is done once.
+
+**1. Make a keystore.** This needs `keytool`, which comes with Java. If `keytool -help` doesn't work, install a JDK such as [Eclipse Temurin](https://adoptium.net) (on Windows: `winget install EclipseAdoptium.Temurin.21.JDK`, then open a new terminal). Then run this, using a password you'll remember:
+
+```
+keytool -genkeypair -keystore identity.jks -alias identity -keyalg RSA -keysize 2048 -validity 10000 -storepass YOUR_PASSWORD -keypass YOUR_PASSWORD -dname "CN=Identity"
+```
+
+The alias must be `identity`, and both passwords must be the same, because the build uses one password for both.
+
+**2. Turn it into text.** GitHub secrets hold text, so encode the file as base64:
+
+- Windows (PowerShell): `[Convert]::ToBase64String([IO.File]::ReadAllBytes("identity.jks")) | Set-Clipboard`
+- macOS: `base64 -i identity.jks | pbcopy`
+- Linux: `base64 -w0 identity.jks`, then copy the output
+
+**3. Add two repository secrets.** On GitHub, open this repository's **Settings → Secrets and variables → Actions** and press **New repository secret** for each:
+
+| Name | Value |
+| --- | --- |
+| `ANDROID_KEYSTORE` | the base64 text from step 2 |
+| `ANDROID_KEYSTORE_PASSWORD` | the password from step 1 |
+
+**4. Build and reinstall once.** Re-run the latest **Build Android app** workflow (open it under **Actions**, then **Re-run all jobs**), or push any change. If the "No ANDROID_KEYSTORE secret" warning is gone from the run, signing worked. The app on your phone still has the old one-off key, so uninstall it once and install the new APK. From then on, every new APK installs straight over the last one.
+
+**Keep `identity.jks` and its password somewhere safe**, such as a password manager, and never commit it: this repository is public. If you lose it, you can make a new one, but the next update will need one more uninstall.
 
 ## Tasks
 
@@ -39,7 +66,7 @@ Reminders: on Android they are scheduled with the system, so they arrive even wh
 
 ## Google Calendar
 
-The Windows app connects to Google Calendar (Data → Google Calendar). Tasks with a date are copied to a calendar called "Identity" in your Google account (all-day, or 30 minutes at the due time) and kept up to date as you edit, finish (shown with ✓) or delete them. Your primary calendar's events, from 30 days back to 120 days ahead, show read-only under Schedule on Today and on the calendar. The phone gets those events through sync; Google sign-in only runs on the desktop. Edits made to the "Identity" events in Google are overwritten by the app.
+The Windows app connects to Google Calendar (Data → Google Calendar). Tasks with a date are copied to a calendar called "Identity" in your Google account (all-day, or 30 minutes at the due time) and kept up to date as you edit, finish (shown with ✓) or delete them. Events from your other Google calendars, from 30 days back to 120 days ahead, show read-only under Schedule on Today and on the calendar, each in its Google colour. The Calendar screen has a **Calendars** row listing the same calendars as Google Calendar's sidebar. They start ticked or unticked as they are in Google, and you can switch each on or off there; that choice is kept on each device. The phone gets those events through sync; Google sign-in only runs on the desktop. Edits made to the "Identity" events in Google are overwritten by the app.
 
 ### Setting up your Google sign-in key
 
@@ -78,7 +105,7 @@ If you skip this, Google treats the app as "testing", and your sign-in stops wor
 2. Under **Publishing status**, press **Publish app**, then **Confirm**.
 3. Google will say the app needs verification. You don't need it: verification is for apps used by the public, and an unverified app works fine for you. You'll just see a warning when you connect.
 
-You don't need to add scopes under **Data access**. The app asks for exactly two when you connect: "See, create, change, and delete secondary calendars it creates" and "View events on all your calendars".
+You don't need to add scopes under **Data access**. The app asks for exactly three when you connect: "See, create, change, and delete secondary calendars it creates", "See the list of Google calendars you're subscribed to", and "View events on all your calendars".
 
 **5. Create the Desktop client**
 
@@ -93,7 +120,7 @@ You don't need to add scopes under **Data access**. The app asks for exactly two
 2. Paste the client ID and client secret into their fields.
 3. Press **Connect**. Your browser opens a Google sign-in page.
 4. Choose your account. When Google says **"Google hasn't verified this app"**, click **Advanced**, then **Go to Identity (unsafe)**. It is "unsafe" only because Google hasn't reviewed it; it is your own key.
-5. Tick both permissions and press **Continue**. The browser says you can close the tab, and the app shows "Connected".
+5. Tick all three permissions and press **Continue**. The browser says you can close the tab, and the app shows "Connected".
 
 The first sync creates a calendar called **Identity** in your Google account, copies your dated tasks into it, and loads your events. After that it syncs every 10 minutes, a few seconds after you change a task, and whenever you press **Sync now**.
 
@@ -106,6 +133,7 @@ The client ID, secret and sign-in tokens are stored only in the app's local data
 - **"invalid_client"**: the ID or secret was pasted wrong, often with a missing character or an extra space. Copy both again from **Clients**.
 - **"Google Calendar API has not been used in project … or it is disabled"**: do step 2, wait a minute, then press **Sync now**.
 - **It worked, but a week later sync shows "Google sign-in failed: … expired or revoked"**: the app was still in testing mode when you connected. Publish it (step 4), then **Disconnect** and **Connect** again.
+- **The Calendar screen says "Showing your primary calendar only"**: you connected before the app could read your calendar list, or you left that permission unticked. Press **Disconnect**, then **Connect**, and tick all three.
 - **"Google didn't grant offline access"**: remove Identity at [myaccount.google.com/connections](https://myaccount.google.com/connections), then press **Connect** again.
 - **The browser didn't open, or you closed it**: press **Connect** again. The app waits up to 5 minutes for the sign-in to finish.
 - **To stop syncing**: press **Disconnect** in the app. To revoke access completely, also remove "Identity" at [myaccount.google.com/connections](https://myaccount.google.com/connections). The **Identity** calendar stays in Google until you delete it there.

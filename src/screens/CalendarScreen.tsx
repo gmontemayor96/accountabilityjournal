@@ -5,7 +5,8 @@ import { todayKey } from "../domain/dates";
 import type { Day, HabitEntry } from "../domain/model";
 import { dayStats, entriesByDate, inMonth, monthGrid } from "../domain/stats";
 import { isDue } from "../domain/schedule";
-import { eventsOn } from "../google/events";
+import { calendarShown, eventsOn } from "../google/events";
+import { useVisibleEvents } from "../hooks/useVisibleEvents";
 import { getHabitType } from "../habitTypes";
 import { useStore } from "../store";
 
@@ -13,7 +14,8 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 const WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export function CalendarScreen() {
-  const { repo, habits, tags, tasks, events, openDay, dataVersion } = useStore();
+  const { repo, habits, tags, tasks, openDay, dataVersion, calendars, calendarChoices, toggleCalendar, primaryOnly } = useStore();
+  const { events, colorOf } = useVisibleEvents();
   const today = todayKey();
   const [month, setMonth] = useState(() => {
     const d = new Date();
@@ -79,6 +81,17 @@ export function CalendarScreen() {
               ))}
             </div>
           )}
+          {calendars.length > 0 && !focus && (
+            <div className="filters">
+              <span className="label">Calendars</span>
+              {calendars.map((c) => (
+                <button key={c.id} className="chip" aria-pressed={calendarShown(c, calendarChoices)} onClick={() => void toggleCalendar(c.id)} title={c.primary ? "Your primary calendar" : undefined}>
+                  <span className="dot" style={{ background: c.color }} />{c.name}
+                </button>
+              ))}
+            </div>
+          )}
+          {primaryOnly && !focus && <p className="hint filters">Showing your primary calendar only. Disconnect and connect Google again in Data to choose from all your calendars.</p>}
           <div className="cal" role="grid" aria-label={`${MONTHS[month.m]} ${month.y}`}>
             {WEEK.map((w) => <div key={w} className="wd">{w}</div>)}
             {grid.map((k) => {
@@ -125,7 +138,7 @@ export function CalendarScreen() {
                   <span className="d"><b>{Number(k.slice(8))}</b>{day?.journal && !focus ? <span className="jmark" title="Has a journal entry">{Icons.journal}</span> : null}</span>
                   {body}
                   {dayEvents.length > 0 && (
-                    <span className="evline" title={dayEvents.map((e) => e.title).join("\n")}>
+                    <span className="evline" style={{ borderLeftColor: colorOf(dayEvents[0].calendarId) }} title={dayEvents.map((e) => e.title).join("\n")}>
                       {dayEvents[0].title}{dayEvents.length > 1 ? ` +${dayEvents.length - 1}` : ""}
                     </span>
                   )}

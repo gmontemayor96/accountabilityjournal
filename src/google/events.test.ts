@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Task } from "../domain/model";
-import { eventFingerprint, eventIdFor, eventsOn, eventTimeLabel, fromGoogle, planPush, taskToEvent } from "./events";
+import { eventFingerprint, eventIdFor, eventsOn, eventTimeLabel, fromGoogle, planPush, taskToEvent, visibleEvents, type CalEvent, type CalInfo } from "./events";
 
 const task = (over: Partial<Task>): Task => ({
   id: "t_1", title: "Dentist", notes: "", dueDate: "2026-10-27", dueTime: null, remindAt: null, doneAt: null, createdAt: "", tags: [], ...over,
@@ -51,5 +51,22 @@ describe("Google events", () => {
     const plan = planPush([a, b, c], pushed);
     expect(plan.upsert.map((t) => t.id)).toEqual(["b"]);
     expect(plan.remove.sort()).toEqual(["c", "d"]);
+  });
+});
+
+describe("visibleEvents", () => {
+  const ev = (id: string, calendarId?: string): CalEvent => ({ id, title: id, startDate: "2026-10-26", startTime: null, endDate: "2026-10-26", endTime: null, calendarId });
+  const cal = (id: string, selected: boolean): CalInfo => ({ id, name: id, color: "#000", primary: false, selected });
+  const events = [ev("a", "work"), ev("b", "family"), ev("c")];
+  const cals = [cal("work", true), cal("family", false)];
+  const ids = (l: CalEvent[]) => l.map((e) => e.id);
+
+  it("follows Google's ticks until the user chooses", () => {
+    expect(ids(visibleEvents(events, cals, {}))).toEqual(["a", "c"]);
+    expect(ids(visibleEvents(events, cals, { family: true, work: false }))).toEqual(["b", "c"]);
+  });
+
+  it("keeps events from calendars it doesn't know", () => {
+    expect(ids(visibleEvents(events, [], {}))).toEqual(["a", "b", "c"]);
   });
 });

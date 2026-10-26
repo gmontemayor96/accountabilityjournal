@@ -7,7 +7,7 @@ const time = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyl
 
 /** Connects the desktop app to Google Calendar. On the phone it only says where events come from. */
 export function GoogleSection() {
-  const { repo, google, events, connectGoogle, disconnectGoogle, googleSyncNow } = useStore();
+  const { repo, google, events, calendars, primaryOnly, connectGoogle, disconnectGoogle, googleSyncNow } = useStore();
   const [clientId, setClientId] = useState("");
   const [secret, setSecret] = useState("");
   const [busy, setBusy] = useState(false);
@@ -46,15 +46,16 @@ export function GoogleSection() {
     <>
       <h2 className="sectionhead">Google Calendar</h2>
       <p className="hint">
-        Tasks with a date go to a calendar called "Identity" in your Google account, and your Google events show on the calendar and Today
-        (read-only). Your phone gets them through sync.
+        Tasks with a date go to their own calendar, called "Identity", in your Google account. Events from your other Google calendars show on
+        the calendar and Today (read-only); switch calendars on and off at the top of the Calendar screen. Your phone gets them through sync.
       </p>
       {google.connected ? (
         <>
           <p role="status">
             Connected.{" "}
-            {google.syncing ? "Syncing…" : google.lastAt ? `Last synced ${time(google.lastAt)}, ${events.length} events.` : ""}
+            {google.syncing ? "Syncing…" : google.lastAt ? `Last synced ${time(google.lastAt)}, ${events.length} events from ${calendars.length || 1} ${calendars.length === 1 || primaryOnly ? "calendar" : "calendars"}.` : ""}
           </p>
+          {primaryOnly && <p className="hint">This sign-in can only read your primary calendar. Disconnect and connect again to allow reading your calendar list.</p>}
           {google.error && <p className="error">{google.error}</p>}
           <div className="inline">
             <button className="btn" disabled={google.syncing} onClick={() => void googleSyncNow()}>Sync now</button>

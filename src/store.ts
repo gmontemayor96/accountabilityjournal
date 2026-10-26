@@ -9,7 +9,7 @@ import { syncOnce, type SyncResult } from "./sync/engine";
 import type { SyncData } from "./sync/types";
 import { dueReminders, remindersScheduledBySystem, scheduleAndroid, sentKey, showNow } from "./tasks/reminders";
 import { googleSync, isConnected, loadEventCache, signIn, signOut } from "./google/client";
-import type { CalEvent } from "./google/events";
+import { calendarShown, type CalEvent, type CalInfo, type EventCache } from "./google/events";
 import { isAndroid } from "./sync/io";
 import { defaultDeviceName, tauriSyncIO } from "./sync/io";
 
@@ -32,6 +32,12 @@ interface State {
   lastSync: SyncResult | null;
   /** Google Calendar events (read-only), fetched by the desktop app and shared through sync. */
   events: CalEvent[];
+  /** The Google calendars those events come from, and whether only the primary one could be read. */
+  calendars: CalInfo[];
+  primaryOnly: boolean;
+  /** Calendars switched on or off in the app, overriding their tick in Google. Kept on this device. */
+  calendarChoices: Record<string, boolean>;
+  toggleCalendar(id: string): Promise<void>;
   google: { connected: boolean; syncing: boolean; lastAt: string | null; error: string | null };
   connectGoogle(clientId: string, clientSecret: string): Promise<void>;
   disconnectGoogle(): Promise<void>;
@@ -100,6 +106,21 @@ function onWrites(repo: Repo, after: (method: string) => void): Repo {
   });
 }
 
+const CHOICES_KEY = "calendar.shown";
+
+function cacheState(cache: EventCache | null): Pick<State, "events" | "calendars" | "primaryOnly"> {
+  return { events: cache?.events ?? [], calendars: cache?.calendars ?? [], primaryOnly: !!cache?.primaryOnly };
+}
+
+function parseChoices(json: string | null): Record<string, boolean> {
+  try {
+    const raw = JSON.parse(json ?? "{}");
+    return raw && typeof raw === "object" ? Object.fromEntries(Object.entries(raw).filter(([, v]) => typeof v === "boolean")) as Record<string, boolean> : {};
+  } catch {
+    return {};
+  }
+}
+
 let syncTimer: ReturnType<typeof setTimeout> | undefined;
 let googleTimer: ReturnType<typeof setTimeout> | undefined;
 // Google sign-in uses a browser redirect to a local port, which only the desktop app can catch.
@@ -159,6 +180,9 @@ export const useStore = create<State>((set, get) => {
     syncing: false,
     lastSync: null,
     events: [],
+    calendars: [],
+    primaryOnly: false,
+    calendarChoices: {},
     google: { connected: false, syncing: false, lastAt: null, error: null },
 
     async init() {
@@ -179,7 +203,12 @@ export const useStore = create<State>((set, get) => {
         const [habits, tags, tasks] = await Promise.all([repo.loadHabits(), repo.loadTags(), repo.loadTasks()]);
         set({ repo, habits, tags, tasks });
         await get().setDate(get().date);
-        set({ status: "ready", events: (await loadEventCache(repo))?.events ?? [], google: { ...get().google, connected: await isConnected(repo) } });
+        set({
+          status: "ready",
+          ...cacheState(await loadEventCache(repo)),
+          calendarChoices: parseChoices(await repo.getSetting(CHOICES_KEY)),
+          google: { ...get().google, connected: await isConnected(repo) },
+        });
         if (isDesktopApp) {
           void get().backupIfDue();
           setInterval(() => void get().backupIfDue(), 3_600_000);
@@ -216,7 +245,17 @@ export const useStore = create<State>((set, get) => {
         await reloadAll();
         void get().googleSyncNow();
       }
-      set({ events: (await loadEventCache(repo))?.events ?? get().events });
+      const cache = await loadEventCache(repo);
+      if (cache) set(cacheState(cache));
+    },
+
+    async toggleCalendar(id) {
+      const { calendars, calendarChoices, repo } = get();
+      const cal = calendars.find((c) => c.id === id);
+      if (!cal) return;
+      const choices = { ...calendarChoices, [id]: !calendarShown(cal, calendarChoices) };
+      set({ calendarChoices: choices });
+      await repo?.setSetting(CHOICES_KEY, JSON.stringify(choices));
     },
 
     async connectGoogle(clientId, clientSecret) {
@@ -240,7 +279,7 @@ export const useStore = create<State>((set, get) => {
       set({ google: { ...google, syncing: true } });
       try {
         const { events } = await googleSync(repo, tasks);
-        set({ events: events.events, google: { ...get().google, syncing: false, lastAt: new Date().toISOString(), error: null } });
+        set({ ...cacheState(events), google: { ...get().google, syncing: false, lastAt: new Date().toISOString(), error: null } });
         void get().syncNow(); // pass fresh events on to the phone
       } catch (e) {
         set({ google: { ...get().google, syncing: false, error: e instanceof Error ? e.message : String(e) } });

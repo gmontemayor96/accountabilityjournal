@@ -9,11 +9,35 @@ export interface CalEvent {
   startTime: string | null; // HH:MM local, null for all-day
   endDate: string; // last day it covers, inclusive
   endTime: string | null;
+  /** The Google calendar it came from. Missing in caches written before calendars were tracked. */
+  calendarId?: string;
+}
+
+/** One of the user's Google calendars, as listed in Google Calendar's sidebar. */
+export interface CalInfo {
+  id: string;
+  name: string;
+  color: string;
+  primary: boolean;
+  /** Whether it is ticked in Google Calendar; the app's starting point for showing it. */
+  selected: boolean;
 }
 
 export interface EventCache {
   fetchedAt: string;
   events: CalEvent[];
+  calendars?: CalInfo[];
+  /** Set when the sign-in predates calendar-list access, so only the primary calendar is read. */
+  primaryOnly?: boolean;
+}
+
+/** Whether a calendar's events show: the user's choice in the app, else its tick in Google. */
+export const calendarShown = (c: CalInfo, choices: Record<string, boolean>) => choices[c.id] ?? c.selected;
+
+/** Drops events from calendars that are switched off. Events from unknown calendars stay. */
+export function visibleEvents(events: CalEvent[], calendars: CalInfo[], choices: Record<string, boolean>): CalEvent[] {
+  const off = new Set(calendars.filter((c) => !calendarShown(c, choices)).map((c) => c.id));
+  return off.size ? events.filter((e) => !e.calendarId || !off.has(e.calendarId)) : events;
 }
 
 /** Events on a date, all-day ones first, then by start time. */
@@ -43,18 +67,18 @@ export interface GoogleEvent {
 }
 
 /** Converts an event from the Calendar API into local dates and times. Cancelled events give null. */
-export function fromGoogle(g: GoogleEvent): CalEvent | null {
+export function fromGoogle(g: GoogleEvent, calendarId?: string): CalEvent | null {
   if (g.status === "cancelled" || !g.start || !g.end) return null;
   const title = g.summary?.trim() || "(No title)";
   if (g.start.date && g.end.date) {
     // All-day: Google's end date is exclusive.
-    return { id: g.id, title, startDate: g.start.date, startTime: null, endDate: addDays(g.end.date, -1), endTime: null };
+    return { id: g.id, title, startDate: g.start.date, startTime: null, endDate: addDays(g.end.date, -1), endTime: null, ...(calendarId ? { calendarId } : {}) };
   }
   if (!g.start.dateTime || !g.end.dateTime) return null;
   const s = new Date(g.start.dateTime), e = new Date(g.end.dateTime);
   // An event ending exactly at midnight belongs to the day before.
   const last = localTime(e) === "00:00" && e > s ? new Date(e.getTime() - 60_000) : e;
-  return { id: g.id, title, startDate: localDate(s), startTime: localTime(s), endDate: localDate(last), endTime: localTime(e) };
+  return { id: g.id, title, startDate: localDate(s), startTime: localTime(s), endDate: localDate(last), endTime: localTime(e), ...(calendarId ? { calendarId } : {}) };
 }
 
 /** Google event ids allow a-v and 0-9; hex fits, so each task gets a stable event id. */
