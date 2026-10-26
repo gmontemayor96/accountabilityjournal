@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DataSection } from "../components/DataSection";
 import { isDesktopApp } from "../data";
 import { SETTING } from "../sync/engine";
 import { androidBridge, defaultDeviceName, isAndroid, pickFolder } from "../sync/io";
@@ -50,15 +51,16 @@ export function SyncScreen() {
     <>
       <header className="viewhead">
         <div>
-          <h1>Sync</h1>
-          <div className="sub">Keep your PC and phone in step through a folder that Syncthing shares between them.</div>
+          <h1>Data</h1>
+          <div className="sub">Sync between your devices, daily backups, and export to JSON or CSV.</div>
         </div>
       </header>
       <section className="canvas syncpage">
         {!isDesktopApp ? (
-          <p className="empty">Sync works in the Windows and Android apps. This browser preview keeps its data to itself.</p>
+          <p className="empty">Sync, backups and export work in the Windows and Android apps. This browser preview keeps its data to itself.</p>
         ) : (
           <>
+            <h2 className="sectionhead first">Sync</h2>
             {isAndroid && !allFiles && (
               <div className="notice">
                 <p>Identity needs <b>All files access</b> to read and write your Syncthing folder.</p>
@@ -110,6 +112,7 @@ export function SyncScreen() {
               Sync runs when the app opens, when you come back to it, every minute while it is open, and a few seconds after you change
               something. If both devices change the same thing, the later change wins.
             </p>
+            <DataSection />
           </>
         )}
       </section>

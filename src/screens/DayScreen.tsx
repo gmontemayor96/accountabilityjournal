@@ -4,10 +4,12 @@ import { TagPicker } from "../components/TagPicker";
 import { addDays, longDate, todayKey } from "../domain/dates";
 import { MOODS, type Habit } from "../domain/model";
 import { describeSchedule, isDue } from "../domain/schedule";
+import type { Streak } from "../domain/streaks";
 import { getHabitType } from "../habitTypes";
+import { useStreaks } from "../hooks/useStreaks";
 import { useStore } from "../store";
 
-function HabitRow({ habit, onEdit }: { habit: Habit; onEdit: (h: Habit) => void }) {
+function HabitRow({ habit, streak, onEdit }: { habit: Habit; streak?: Streak; onEdit: (h: Habit) => void }) {
   const entry = useStore((s) => s.entries[habit.id]);
   const { logValue, setEntryNote, setEntryField } = useStore();
   const [open, setOpen] = useState(false);
@@ -19,7 +21,12 @@ function HabitRow({ habit, onEdit }: { habit: Habit; onEdit: (h: Habit) => void 
       <div className="top">
         <span className="sw" style={{ background: habit.color }} />
         <div className="hname">
-          <div className="name">{habit.name}</div>
+          <div className="name">
+            {habit.name}
+            {streak && streak.current > 1 && (
+              <span className="streak" title={`Best: ${streak.best} ${streak.unit}s`}>{streak.current} {streak.unit}s in a row</span>
+            )}
+          </div>
           <div className="why">
             {habit.identity && `${habit.identity} · `}
             {describeSchedule(habit.schedule)}
@@ -62,6 +69,7 @@ function HabitRow({ habit, onEdit }: { habit: Habit; onEdit: (h: Habit) => void 
 
 export function DayScreen({ onEditHabit }: { onEditHabit: (h?: Habit) => void }) {
   const { date, day, habits, tags, entries, setDate, setJournal, setMood, toggleDayTag, createTag } = useStore();
+  const streaks = useStreaks();
   const active = habits.filter((h) => !h.archivedAt);
   const due = active.filter((h) => isDue(h.schedule, date));
   const notDue = active.filter((h) => !isDue(h.schedule, date));
@@ -101,11 +109,11 @@ export function DayScreen({ onEditHabit }: { onEditHabit: (h?: Habit) => void })
                 <button className="btn primary" onClick={() => onEditHabit()}>Add your first habit</button>
               </div>
             )}
-            {due.map((h) => <HabitRow key={h.id} habit={h} onEdit={onEditHabit} />)}
+            {due.map((h) => <HabitRow key={h.id} habit={h} streak={streaks[h.id]} onEdit={onEditHabit} />)}
             {notDue.length > 0 && (
               <details className="unsched">
                 <summary>{notDue.length} not scheduled today</summary>
-                {notDue.map((h) => <HabitRow key={h.id} habit={h} onEdit={onEditHabit} />)}
+                {notDue.map((h) => <HabitRow key={h.id} habit={h} streak={streaks[h.id]} onEdit={onEditHabit} />)}
               </details>
             )}
           </div>

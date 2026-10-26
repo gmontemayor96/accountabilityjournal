@@ -2,7 +2,11 @@ import { create } from "zustand";
 import { isDesktopApp, openRepo, type Repo } from "./data";
 import { todayKey } from "./domain/dates";
 import { emptyDay, newId, PALETTE, slugTagId, type Day, type Habit, type HabitEntry, type Tag } from "./domain/model";
+import { toBackup } from "./data/exportFormats";
+import { writeBackup } from "./data/files";
+import { isEmpty, planMerge } from "./sync/merge";
 import { syncOnce, type SyncResult } from "./sync/engine";
+import type { SyncData } from "./sync/types";
 import { defaultDeviceName, tauriSyncIO } from "./sync/io";
 
 export type View = "day" | "habits" | "calendar" | "journal" | "tags" | "sync";
@@ -25,6 +29,10 @@ interface State {
   init(): Promise<void>;
   /** Merges with the other devices' files in the sync folder, then writes ours. */
   syncNow(): Promise<void>;
+  /** Writes today's backup if there isn't one yet. Returns the backup folder when it wrote one. */
+  backupIfDue(): Promise<string | null>;
+  /** Merges a backup or export into the database; newer versions win. Returns how many records changed. */
+  importData(data: SyncData): Promise<number>;
   setView(view: View): void;
   setDate(date: string): Promise<void>;
 
@@ -94,6 +102,15 @@ export const useStore = create<State>((set, get) => {
     set({ entries: { ...entries, [habitId]: change(current) } });
   }
 
+  /** Reloads everything shown, after data changed underneath the screens (sync, import). */
+  async function reloadAll() {
+    const repo = get().repo;
+    if (!repo) return;
+    const [habits, tags] = await Promise.all([repo.loadHabits(), repo.loadTags()]);
+    set({ habits, tags, dataVersion: get().dataVersion + 1 });
+    await get().setDate(get().date);
+  }
+
   function updateDay(change: Partial<Day>, immediate: boolean) {
     const day = { ...get().day, ...change };
     set({ day });
@@ -129,6 +146,8 @@ export const useStore = create<State>((set, get) => {
         await get().setDate(get().date);
         set({ status: "ready" });
         if (isDesktopApp) {
+          void get().backupIfDue();
+          setInterval(() => void get().backupIfDue(), 3_600_000);
           void get().syncNow();
           // Pick up other devices' changes when the app comes back into view, and every minute while open.
           document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && void get().syncNow());
@@ -152,11 +171,33 @@ export const useStore = create<State>((set, get) => {
       set({ syncing: true });
       const result = await syncOnce(repo, tauriSyncIO, defaultDeviceName);
       set({ syncing: false, lastSync: result });
-      if (result.status === "ok" && result.applied > 0 && !timers.size) {
-        const [habits, tags] = await Promise.all([repo.loadHabits(), repo.loadTags()]);
-        set({ habits, tags, dataVersion: get().dataVersion + 1 });
-        await get().setDate(get().date);
+      if (result.status === "ok" && result.applied > 0 && !timers.size) await reloadAll();
+    },
+
+    async backupIfDue() {
+      const repo = get().repo;
+      if (!repo || !isDesktopApp) return null;
+      const today = todayKey();
+      if ((await repo.getSetting("backup.lastDate")) === today) return null;
+      try {
+        const folder = await writeBackup(`identity-backup-${today}.json`, JSON.stringify(toBackup(await repo.snapshot())));
+        await repo.setSetting("backup.lastDate", today);
+        return folder;
+      } catch (e) {
+        console.error("Identity: backup failed", e);
+        return null;
       }
+    },
+
+    async importData(data) {
+      const repo = get().repo;
+      if (!repo) return 0;
+      const changes = planMerge(await repo.snapshot(), [data]);
+      if (isEmpty(changes)) return 0;
+      await repo.applyChanges(changes);
+      await reloadAll();
+      void get().syncNow();
+      return changes.habits.length + changes.tags.length + changes.days.length + changes.entries.length + changes.tombstones.length;
     },
 
     setView: (view) => set({ view }),

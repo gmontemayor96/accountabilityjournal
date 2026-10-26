@@ -17,7 +17,10 @@ Milestones 1 and 2 of 4 (see the [product and architecture spec](https://claude.
 - [x] Tags: rename, recolor, delete, add
 - [x] Android app, with a phone layout (bottom tabs)
 - [x] Sync between devices through a Syncthing folder
-- [ ] Streaks, backups, export/import (milestone 3)
+- [x] Streaks: current and best, on Today and Habits (per-week habits count weeks)
+- [x] Daily automatic backups (last 30 kept), restore from any of them
+- [x] Export to JSON (re-importable) and CSV (habit log and journal), import JSON
+- [ ] Tasks: one-off to-dos with due dates, tags and reminders, on the calendar
 
 ## Install
 
@@ -26,6 +29,10 @@ Every push builds Windows installers on GitHub Actions. Open the latest run unde
 On Android: open **Actions → Build Android app**, download **identity-android-apk**, unzip it on your phone and open the `.apk` (allow installing from your browser or file manager when asked).
 
 APKs are signed with the keystore in the `ANDROID_KEYSTORE` (base64 of a `.jks` with key alias `identity`) and `ANDROID_KEYSTORE_PASSWORD` repository secrets, so a new APK installs over the old one. Without those secrets each build gets a one-off key, and updating means uninstalling first (sync brings your data back).
+
+## Backups and export
+
+Open **Data**. A backup of everything is written once a day while the app is open (`backups/` next to `identity.db`), and the last 30 are kept. **Restore** next to a backup, or **Import JSON**, merges that file in: anything missing comes back, and records changed more recently than the file are kept. **Export CSV** writes two spreadsheets, your habit log and your journal. On Android, exports go to the Download folder, and imports are picked from there.
 
 ## Sync
 
