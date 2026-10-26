@@ -1,9 +1,11 @@
 import { create } from "zustand";
-import { openRepo, type Repo } from "./data";
+import { isDesktopApp, openRepo, type Repo } from "./data";
 import { todayKey } from "./domain/dates";
 import { emptyDay, newId, PALETTE, slugTagId, type Day, type Habit, type HabitEntry, type Tag } from "./domain/model";
+import { syncOnce, type SyncResult } from "./sync/engine";
+import { defaultDeviceName, tauriSyncIO } from "./sync/io";
 
-export type View = "day" | "habits" | "calendar" | "journal" | "tags";
+export type View = "day" | "habits" | "calendar" | "journal" | "tags" | "sync";
 
 interface State {
   repo: Repo | null;
@@ -15,8 +17,14 @@ interface State {
   date: string;
   day: Day;
   entries: Record<string, HabitEntry>;
+  /** Goes up whenever a sync brings in changes, so screens that load their own data reload. */
+  dataVersion: number;
+  syncing: boolean;
+  lastSync: SyncResult | null;
 
   init(): Promise<void>;
+  /** Merges with the other devices' files in the sync folder, then writes ours. */
+  syncNow(): Promise<void>;
   setView(view: View): void;
   setDate(date: string): Promise<void>;
 
@@ -45,6 +53,26 @@ function debounce(key: string, fn: () => void, ms = 400) {
 }
 
 const reportError = (e: unknown) => console.error("Identity: failed to save", e);
+
+const WRITES = new Set(["saveHabit", "setHabitArchived", "saveTag", "deleteTag", "saveDay", "saveEntry", "deleteEntry"]);
+
+/** Calls `after` once any write to the repository finishes. */
+function onWrites(repo: Repo, after: () => void): Repo {
+  return new Proxy(repo, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+      if (typeof value !== "function") return value;
+      if (!WRITES.has(String(prop))) return value.bind(target);
+      return async (...args: unknown[]) => {
+        const result = await value.apply(target, args);
+        after();
+        return result;
+      };
+    },
+  });
+}
+
+let syncTimer: ReturnType<typeof setTimeout> | undefined;
 
 export const useStore = create<State>((set, get) => {
   /** Writes the habit's entry for the current date, or removes it when nothing is left in it. */
@@ -84,16 +112,50 @@ export const useStore = create<State>((set, get) => {
     date: todayKey(),
     day: emptyDay(todayKey()),
     entries: {},
+    dataVersion: 0,
+    syncing: false,
+    lastSync: null,
 
     async init() {
       try {
-        const repo = await openRepo();
+        // Local edits are sent to the sync folder a few seconds after the last one.
+        const scheduleSync = () => {
+          clearTimeout(syncTimer);
+          syncTimer = setTimeout(() => void get().syncNow(), 4000);
+        };
+        const repo = isDesktopApp ? onWrites(await openRepo(), scheduleSync) : await openRepo();
         const [habits, tags] = await Promise.all([repo.loadHabits(), repo.loadTags()]);
         set({ repo, habits, tags });
         await get().setDate(get().date);
         set({ status: "ready" });
+        if (isDesktopApp) {
+          void get().syncNow();
+          // Pick up other devices' changes when the app comes back into view, and every minute while open.
+          document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && void get().syncNow());
+          window.addEventListener("focus", () => void get().syncNow());
+          setInterval(() => document.visibilityState === "visible" && void get().syncNow(), 60_000);
+        }
       } catch (e) {
         set({ status: "error", error: e instanceof Error ? e.message : String(e) });
+      }
+    },
+
+    async syncNow() {
+      const { repo, syncing } = get();
+      if (!repo || !isDesktopApp || syncing) return;
+      // Typing is still waiting to be saved; try again once it has been.
+      if (timers.size) {
+        clearTimeout(syncTimer);
+        syncTimer = setTimeout(() => void get().syncNow(), 2000);
+        return;
+      }
+      set({ syncing: true });
+      const result = await syncOnce(repo, tauriSyncIO, defaultDeviceName);
+      set({ syncing: false, lastSync: result });
+      if (result.status === "ok" && result.applied > 0 && !timers.size) {
+        const [habits, tags] = await Promise.all([repo.loadHabits(), repo.loadTags()]);
+        set({ habits, tags, dataVersion: get().dataVersion + 1 });
+        await get().setDate(get().date);
       }
     },
 

@@ -1,4 +1,5 @@
 import { emptyDay, type Day, type Habit, type HabitEntry, type Tag } from "../domain/model";
+import { entryKey, type SyncChanges, type SyncData, type Tombstone } from "../sync/types";
 import type { Repo } from "./repo";
 
 interface Snapshot {
@@ -6,7 +7,12 @@ interface Snapshot {
   tags: Tag[];
   days: Record<string, Day>;
   entries: Record<string, HabitEntry>; // key: `${habitId}|${date}`
+  updated?: Record<string, string>; // key: `${kind}:${key}` -> last change
+  tombstones?: Tombstone[];
+  settings?: Record<string, string>;
 }
+
+const EARLY = "2000-01-01T00:00:00.000Z";
 
 /**
  * Keeps data in memory, optionally mirrored to localStorage. Used when the UI runs
@@ -28,6 +34,17 @@ export class MemoryRepo implements Repo {
     this.s = saved ?? { habits: [], tags: [], days: {}, entries: {}, ...initial };
   }
 
+  private stamp(kind: string, key: string, at = new Date().toISOString()) {
+    (this.s.updated ??= {})[`${kind}:${key}`] = at;
+    this.s.tombstones = (this.s.tombstones ?? []).filter((t) => !(t.kind === kind && t.key === key));
+  }
+  private bury(t: Tombstone) {
+    this.s.tombstones = [...(this.s.tombstones ?? []).filter((x) => !(x.kind === t.kind && x.key === t.key)), t];
+  }
+  private at(kind: string, key: string) {
+    return this.s.updated?.[`${kind}:${key}`] ?? EARLY;
+  }
+
   private persist() {
     if (!this.storageKey) return;
     try {
@@ -44,11 +61,13 @@ export class MemoryRepo implements Repo {
     const i = this.s.habits.findIndex((x) => x.id === h.id);
     if (i >= 0) this.s.habits[i] = structuredClone(h);
     else this.s.habits.push(structuredClone(h));
+    this.stamp("habit", h.id);
     this.persist();
   }
   async setHabitArchived(id: string, archivedAt: string | null) {
     const h = this.s.habits.find((x) => x.id === id);
     if (h) h.archivedAt = archivedAt;
+    this.stamp("habit", id);
     this.persist();
   }
   async loadTags() {
@@ -58,13 +77,19 @@ export class MemoryRepo implements Repo {
     const i = this.s.tags.findIndex((x) => x.id === t.id);
     if (i >= 0) this.s.tags[i] = { ...t };
     else this.s.tags.push({ ...t });
+    this.stamp("tag", t.id);
     this.persist();
   }
   async deleteTag(id: string) {
+    this.removeTag({ kind: "tag", key: id, deletedAt: new Date().toISOString() });
+    this.persist();
+  }
+  private removeTag(t: Tombstone) {
+    const id = t.key;
+    this.bury(t);
     this.s.tags = this.s.tags.filter((t) => t.id !== id);
     for (const h of this.s.habits) h.tags = h.tags.filter((t) => t !== id);
     for (const d of Object.values(this.s.days)) d.tags = d.tags.filter((t) => t !== id);
-    this.persist();
   }
   async loadRange(from: string, to: string) {
     const inRange = (d: string) => d >= from && d <= to;
@@ -83,14 +108,63 @@ export class MemoryRepo implements Repo {
   }
   async saveDay(day: Day) {
     this.s.days[day.date] = structuredClone(day);
+    this.stamp("day", day.date);
     this.persist();
   }
   async saveEntry(e: HabitEntry) {
-    this.s.entries[`${e.habitId}|${e.date}`] = structuredClone(e);
+    this.s.entries[entryKey(e)] = structuredClone(e);
+    this.stamp("entry", entryKey(e));
     this.persist();
   }
   async deleteEntry(habitId: string, date: string) {
-    delete this.s.entries[`${habitId}|${date}`];
+    const key = entryKey({ habitId, date });
+    delete this.s.entries[key];
+    this.bury({ kind: "entry", key, deletedAt: new Date().toISOString() });
+    this.persist();
+  }
+
+  async snapshot(): Promise<SyncData> {
+    return structuredClone({
+      habits: this.s.habits.map((data) => ({ data, updatedAt: this.at("habit", data.id) })),
+      tags: this.s.tags.map((data) => ({ data, updatedAt: this.at("tag", data.id) })),
+      days: Object.values(this.s.days).map((data) => ({ data, updatedAt: this.at("day", data.date) })),
+      entries: Object.values(this.s.entries).map((data) => ({ data, updatedAt: this.at("entry", entryKey(data)) })),
+      tombstones: this.s.tombstones ?? [],
+    });
+  }
+  async applyChanges(c: SyncChanges) {
+    const put = <T extends { id: string }>(list: T[], item: T) => {
+      const i = list.findIndex((x) => x.id === item.id);
+      if (i >= 0) list[i] = item;
+      else list.push(item);
+    };
+    for (const r of c.tags) { put(this.s.tags, structuredClone(r.data)); this.stamp("tag", r.data.id, r.updatedAt); }
+    const tagIds = new Set(this.s.tags.map((t) => t.id));
+    for (const r of c.habits) {
+      put(this.s.habits, { ...structuredClone(r.data), tags: r.data.tags.filter((t) => tagIds.has(t)) });
+      this.stamp("habit", r.data.id, r.updatedAt);
+    }
+    for (const r of c.days) {
+      this.s.days[r.data.date] = { ...structuredClone(r.data), tags: r.data.tags.filter((t) => tagIds.has(t)) };
+      this.stamp("day", r.data.date, r.updatedAt);
+    }
+    const habitIds = new Set(this.s.habits.map((h) => h.id));
+    for (const r of c.entries) {
+      if (!habitIds.has(r.data.habitId)) continue;
+      this.s.entries[entryKey(r.data)] = structuredClone(r.data);
+      this.stamp("entry", entryKey(r.data), r.updatedAt);
+    }
+    for (const t of c.tombstones) {
+      if (t.kind === "tag") this.removeTag(t);
+      else { delete this.s.entries[t.key]; this.bury(t); }
+    }
+    this.persist();
+  }
+  async getSetting(key: string) {
+    return this.s.settings?.[key] ?? null;
+  }
+  async setSetting(key: string, value: string) {
+    (this.s.settings ??= {})[key] = value;
     this.persist();
   }
 }

@@ -6,6 +6,7 @@ export const Icons = {
   habits: <svg viewBox="0 0 16 16" {...s}><path d="M2 4h2M2 8h2M2 12h2M6.5 4H14M6.5 8H14M6.5 12H14" /></svg>,
   journal: <svg viewBox="0 0 16 16" {...s}><path d="M3.5 1.8h8a1 1 0 0 1 1 1v10.4a1 1 0 0 1-1 1h-8z" /><path d="M6 5h4M6 7.5h4" /></svg>,
   tags: <svg viewBox="0 0 16 16" {...s}><path d="M1.8 8.6V2.2a.4.4 0 0 1 .4-.4h6.4l5.6 5.6-6.8 6.8z" /><circle cx="5" cy="5" r="1" /></svg>,
+  sync: <svg viewBox="0 0 16 16" {...s}><path d="M13.5 6.5A5.5 5.5 0 0 0 3.2 5M2.5 9.5A5.5 5.5 0 0 0 12.8 11" /><path d="M3 2v3h3M13 14v-3h-3" /></svg>,
   edit: <svg viewBox="0 0 16 16" width="14" height="14" {...s}><path d="M10.5 2.5l3 3L6 13H3v-3z" /></svg>,
   close: <svg viewBox="0 0 16 16" width="14" height="14" {...s} strokeWidth={1.6}><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" /></svg>,
   left: <svg viewBox="0 0 16 16" width="14" height="14" {...s} strokeWidth={1.8}><path d="M10 3 5 8l5 5" /></svg>,

@@ -1,4 +1,5 @@
 import type { Day, Habit, HabitEntry, Tag } from "../domain/model";
+import type { SyncChanges, SyncData } from "../sync/types";
 
 /** Everything the app reads and writes. Screens never talk to storage directly. */
 export interface Repo {
@@ -20,4 +21,13 @@ export interface Repo {
   loadRange(from: string, to: string): Promise<{ days: Day[]; entries: HabitEntry[] }>;
   /** The first date with any saved entry or day, or null when nothing has been logged yet. */
   earliestDate(): Promise<string | null>;
+
+  /** Every record with the time it last changed, plus deletion tombstones, for the sync file. */
+  snapshot(): Promise<SyncData>;
+  /** Applies records and deletions merged from other devices, keeping their timestamps. */
+  applyChanges(changes: SyncChanges): Promise<void>;
+
+  /** Settings that belong to this device only (sync folder, device id). */
+  getSetting(key: string): Promise<string | null>;
+  setSetting(key: string, value: string): Promise<void>;
 }
