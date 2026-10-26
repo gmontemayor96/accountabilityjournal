@@ -19,7 +19,7 @@ async function tauriDriver(): Promise<SqlDriver> {
 
 export async function openRepo(): Promise<Repo> {
   if (isDesktopApp) return new SqliteRepo(await tauriDriver());
-  return new MemoryRepo(sampleData(), "identity-preview-v1");
+  return new MemoryRepo(sampleData(), "identity-preview-v2");
 }
 
 export type { Repo } from "./repo";

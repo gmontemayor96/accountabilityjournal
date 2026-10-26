@@ -5,7 +5,9 @@ import { isDesktopApp } from "./data";
 import type { Habit } from "./domain/model";
 import { DayScreen } from "./screens/DayScreen";
 import { HabitsScreen } from "./screens/HabitsScreen";
-import { ComingSoon } from "./screens/ComingSoon";
+import { CalendarScreen } from "./screens/CalendarScreen";
+import { JournalScreen } from "./screens/JournalScreen";
+import { TagsScreen } from "./screens/TagsScreen";
 import { blankHabit, useStore, type View } from "./store";
 
 const NAV: { view: View; label: string; icon: keyof typeof Icons }[] = [
@@ -51,7 +53,9 @@ export default function App() {
         )}
         {status === "ready" && view === "day" && <DayScreen onEditHabit={openEditor} />}
         {status === "ready" && view === "habits" && <HabitsScreen onEditHabit={openEditor} />}
-        {status === "ready" && (view === "calendar" || view === "journal" || view === "tags") && <ComingSoon view={view} />}
+        {status === "ready" && view === "calendar" && <CalendarScreen />}
+        {status === "ready" && view === "journal" && <JournalScreen />}
+        {status === "ready" && view === "tags" && <TagsScreen />}
       </main>
       {editing && <HabitEditor habit={editing} onClose={() => setEditing(null)} />}
     </div>

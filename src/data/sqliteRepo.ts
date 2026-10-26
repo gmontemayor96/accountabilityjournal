@@ -23,6 +23,17 @@ function parseJson<T>(text: string | null | undefined, fallback: T): T {
   }
 }
 
+function toEntry(e: EntryRow): HabitEntry {
+  return {
+    habitId: e.habit_id,
+    date: e.date,
+    value: e.value,
+    note: e.note ?? "",
+    fields: parseJson<Record<string, string>>(e.fields, {}),
+    loggedAt: e.logged_at,
+  };
+}
+
 export class SqliteRepo implements Repo {
   constructor(private db: SqlDriver) {}
 
@@ -81,6 +92,12 @@ export class SqliteRepo implements Repo {
     );
   }
 
+  async deleteTag(id: string): Promise<void> {
+    await this.db.execute("DELETE FROM habit_tag WHERE tag_id = ?", [id]);
+    await this.db.execute("DELETE FROM day_tag WHERE tag_id = ?", [id]);
+    await this.db.execute("DELETE FROM tag WHERE id = ?", [id]);
+  }
+
   async loadDay(date: string): Promise<{ day: Day; entries: HabitEntry[] }> {
     const [row] = await this.db.select<{ journal: string; mood: number | null }>("SELECT journal, mood FROM day WHERE date = ?", [date]);
     const tags = await this.db.select<{ tag_id: string }>("SELECT tag_id FROM day_tag WHERE date = ?", [date]);
@@ -88,17 +105,27 @@ export class SqliteRepo implements Repo {
     const day: Day = row
       ? { date, journal: row.journal ?? "", mood: row.mood, tags: tags.map((t) => t.tag_id) }
       : { ...emptyDay(date), tags: tags.map((t) => t.tag_id) };
-    return {
-      day,
-      entries: entries.map((e) => ({
-        habitId: e.habit_id,
-        date: e.date,
-        value: e.value,
-        note: e.note ?? "",
-        fields: parseJson<Record<string, string>>(e.fields, {}),
-        loggedAt: e.logged_at,
-      })),
-    };
+    return { day, entries: entries.map(toEntry) };
+  }
+
+  async loadRange(from: string, to: string): Promise<{ days: Day[]; entries: HabitEntry[] }> {
+    const rows = await this.db.select<{ date: string; journal: string; mood: number | null }>(
+      "SELECT date, journal, mood FROM day WHERE date BETWEEN ? AND ?", [from, to]);
+    const tags = await this.db.select<{ date: string; tag_id: string }>("SELECT date, tag_id FROM day_tag WHERE date BETWEEN ? AND ?", [from, to]);
+    const entries = await this.db.select<EntryRow>("SELECT * FROM habit_entry WHERE date BETWEEN ? AND ? ORDER BY date", [from, to]);
+    const days = new Map<string, Day>();
+    for (const r of rows) days.set(r.date, { date: r.date, journal: r.journal ?? "", mood: r.mood, tags: [] });
+    for (const t of tags) {
+      if (!days.has(t.date)) days.set(t.date, emptyDay(t.date));
+      days.get(t.date)!.tags.push(t.tag_id);
+    }
+    return { days: [...days.values()].sort((a, b) => a.date.localeCompare(b.date)), entries: entries.map(toEntry) };
+  }
+
+  async earliestDate(): Promise<string | null> {
+    const [row] = await this.db.select<{ d: string | null }>(
+      "SELECT MIN(d) AS d FROM (SELECT MIN(date) AS d FROM habit_entry UNION ALL SELECT MIN(date) FROM day UNION ALL SELECT MIN(date) FROM day_tag)");
+    return row?.d ?? null;
   }
 
   async saveDay(day: Day): Promise<void> {
