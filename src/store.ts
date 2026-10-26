@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { isDesktopApp, openRepo, type Repo } from "./data";
 import { todayKey } from "./domain/dates";
-import { emptyDay, newId, PALETTE, slugTagId, type Day, type Habit, type HabitEntry, type Tag, type Task } from "./domain/model";
+import { emptyDay, newId, PALETTE, slugTagId, type Area, type Day, type Goal, type Habit, type HabitEntry, type Horizon, type Tag, type Task } from "./domain/model";
 import { toBackup } from "./data/exportFormats";
 import { writeBackup } from "./data/files";
 import { changeCount, isEmpty, planMerge } from "./sync/merge";
@@ -13,7 +13,7 @@ import { calendarShown, type CalEvent, type CalInfo, type EventCache } from "./g
 import { isAndroid } from "./sync/io";
 import { defaultDeviceName, tauriSyncIO } from "./sync/io";
 
-export type View = "day" | "tasks" | "habits" | "calendar" | "journal" | "tags" | "sync";
+export type View = "day" | "tasks" | "goals" | "habits" | "calendar" | "journal" | "tags" | "sync";
 
 interface State {
   repo: Repo | null;
@@ -76,6 +76,18 @@ interface State {
   deleteTask(id: string): Promise<void>;
   /** Shows reminders that are due (desktop) or hands them to the system (Android). */
   checkReminders(): Promise<void>;
+
+  areas: Area[];
+  goals: Goal[];
+  /** The goal open in the editor, or null. */
+  editingGoal: Goal | null;
+  editGoal(goal: Goal | null): void;
+  saveArea(area: Area): Promise<void>;
+  /** Deletes the area with its goals; tasks stay but lose their goal. */
+  deleteArea(id: string): Promise<void>;
+  saveGoal(goal: Goal): Promise<void>;
+  toggleGoal(id: string): Promise<void>;
+  deleteGoal(id: string): Promise<void>;
   setArchived(id: string, archived: boolean): Promise<void>;
 }
 
@@ -88,7 +100,8 @@ function debounce(key: string, fn: () => void, ms = 400) {
 
 const reportError = (e: unknown) => console.error("Identity: failed to save", e);
 
-const WRITES = new Set(["saveHabit", "setHabitArchived", "saveTag", "deleteTag", "saveDay", "saveEntry", "deleteEntry", "saveTask", "deleteTask"]);
+const WRITES = new Set(["saveHabit", "setHabitArchived", "saveTag", "deleteTag", "saveDay", "saveEntry", "deleteEntry", "saveTask", "deleteTask",
+  "saveArea", "deleteArea", "saveGoal", "deleteGoal"]);
 
 /** Calls `after` with the method name once any write to the repository finishes. */
 function onWrites(repo: Repo, after: (method: string) => void): Repo {
@@ -150,8 +163,8 @@ export const useStore = create<State>((set, get) => {
   async function reloadAll() {
     const repo = get().repo;
     if (!repo) return;
-    const [habits, tags, tasks] = await Promise.all([repo.loadHabits(), repo.loadTags(), repo.loadTasks()]);
-    set({ habits, tags, tasks, dataVersion: get().dataVersion + 1 });
+    const [habits, tags, tasks, areas, goals] = await Promise.all([repo.loadHabits(), repo.loadTags(), repo.loadTasks(), repo.loadAreas(), repo.loadGoals()]);
+    set({ habits, tags, tasks, areas, goals, dataVersion: get().dataVersion + 1 });
     void get().checkReminders();
     await get().setDate(get().date);
   }
@@ -200,8 +213,8 @@ export const useStore = create<State>((set, get) => {
               googleTimer = setTimeout(() => void get().googleSyncNow(), 5000);
             })
           : await openRepo();
-        const [habits, tags, tasks] = await Promise.all([repo.loadHabits(), repo.loadTags(), repo.loadTasks()]);
-        set({ repo, habits, tags, tasks });
+        const [habits, tags, tasks, areas, goals] = await Promise.all([repo.loadHabits(), repo.loadTags(), repo.loadTasks(), repo.loadAreas(), repo.loadGoals()]);
+        set({ repo, habits, tags, tasks, areas, goals });
         await get().setDate(get().date);
         set({
           status: "ready",
@@ -383,6 +396,48 @@ export const useStore = create<State>((set, get) => {
 
     editTask: (editingTask) => set({ editingTask }),
 
+    areas: [],
+    goals: [],
+    editingGoal: null,
+    editGoal: (editingGoal) => set({ editingGoal }),
+
+    async saveArea(area) {
+      const { repo, areas } = get();
+      await repo?.saveArea(area);
+      set({ areas: areas.some((a) => a.id === area.id) ? areas.map((a) => (a.id === area.id ? area : a)) : [...areas, area] });
+    },
+
+    async deleteArea(id) {
+      const { repo, areas, goals, tasks } = get();
+      await repo?.deleteArea(id);
+      const gone = new Set(goals.filter((g) => g.areaId === id).map((g) => g.id));
+      set({
+        areas: areas.filter((a) => a.id !== id),
+        goals: goals.filter((g) => !gone.has(g.id)),
+        tasks: tasks.map((t) => (t.goalId && gone.has(t.goalId) ? { ...t, goalId: null } : t)),
+      });
+    },
+
+    async saveGoal(goal) {
+      const { repo, goals } = get();
+      await repo?.saveGoal(goal);
+      set({ goals: goals.some((g) => g.id === goal.id) ? goals.map((g) => (g.id === goal.id ? goal : g)) : [...goals, goal] });
+    },
+
+    async toggleGoal(id) {
+      const goal = get().goals.find((g) => g.id === id);
+      if (goal) await get().saveGoal({ ...goal, doneAt: goal.doneAt ? null : new Date().toISOString() });
+    },
+
+    async deleteGoal(id) {
+      const { repo, goals, tasks } = get();
+      await repo?.deleteGoal(id);
+      set({
+        goals: goals.filter((g) => g.id !== id).map((g) => (g.parentId === id ? { ...g, parentId: null } : g)),
+        tasks: tasks.map((t) => (t.goalId === id ? { ...t, goalId: null } : t)),
+      });
+    },
+
     async saveTask(task) {
       const { repo, tasks } = get();
       await repo?.saveTask(task);
@@ -449,5 +504,13 @@ export function blankHabit(existing: Habit[]): Habit {
 }
 
 export function blankTask(dueDate: string | null = null): Task {
-  return { id: newId("t"), title: "", notes: "", dueDate, dueTime: null, remindAt: null, doneAt: null, createdAt: new Date().toISOString(), tags: [] };
+  return { id: newId("t"), title: "", notes: "", dueDate, dueTime: null, remindAt: null, doneAt: null, createdAt: new Date().toISOString(), tags: [], goalId: null };
+}
+
+export function blankArea(areas: Area[]): Area {
+  return { id: newId("a"), name: "", color: PALETTE[areas.length % PALETTE.length], sortOrder: areas.length, createdAt: new Date().toISOString() };
+}
+
+export function blankGoal(areaId: string, horizon: Horizon, parentId: string | null = null): Goal {
+  return { id: newId("g"), areaId, parentId, title: "", notes: "", horizon, doneAt: null, createdAt: new Date().toISOString() };
 }

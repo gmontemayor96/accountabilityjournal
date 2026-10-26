@@ -1,5 +1,5 @@
 import { addDays, todayKey } from "../domain/dates";
-import type { Day, Habit, HabitEntry, Tag, Task } from "../domain/model";
+import type { Area, Day, Goal, Habit, HabitEntry, Tag, Task } from "../domain/model";
 import { isDue } from "../domain/schedule";
 
 const now = "2026-10-01T00:00:00.000Z";
@@ -14,7 +14,7 @@ function rng(seed: number) {
 }
 
 /** Example habits and six weeks of history for the browser preview only. The desktop app starts empty. */
-export function sampleData(today = todayKey()): { habits: Habit[]; tags: Tag[]; days: Record<string, Day>; entries: Record<string, HabitEntry>; tasks: Task[]; settings: Record<string, string> } {
+export function sampleData(today = todayKey()): { habits: Habit[]; tags: Tag[]; days: Record<string, Day>; entries: Record<string, HabitEntry>; tasks: Task[]; areas: Area[]; goals: Goal[]; settings: Record<string, string> } {
   const tags: Tag[] = [
     { id: "fitness", name: "fitness", color: "#E07A5F" },
     { id: "mind", name: "mind", color: "#9B6BD6" },
@@ -62,9 +62,30 @@ export function sampleData(today = todayKey()): { habits: Habit[]; tags: Tag[]; 
   }
   const task = (id: string, title: string, dueDate: string | null, over: Partial<Task> = {}): Task =>
     ({ id, title, notes: "", dueDate, dueTime: null, remindAt: null, doneAt: null, createdAt: now, tags: [], ...over });
+  // Example areas and goals, with tasks linked to the shortest ones.
+  const areas = [
+    { id: "a_health", name: "Health", color: "#2FA37A", sortOrder: 0, createdAt: now },
+    { id: "a_career", name: "Career", color: "#3D8BD9", sortOrder: 1, createdAt: now },
+  ];
+  const goal = (id: string, areaId: string, horizon: Goal["horizon"], title: string, parentId: string | null = null, doneAt: string | null = null): Goal =>
+    ({ id, areaId, parentId, title, notes: "", horizon, doneAt, createdAt: now });
+  const goals = [
+    goal("g_strong", "a_health", "10y", "Stay strong and mobile into my 50s"),
+    goal("g_marathon", "a_health", "5y", "Run a marathon", "g_strong"),
+    goal("g_half", "a_health", "year", "Run a half marathon", "g_marathon"),
+    goal("g_10k", "a_health", "month", "Run 10k without stopping", "g_half"),
+    goal("g_base", "a_health", "month", "Build up to 30 km a week", "g_half"),
+    goal("g_week", "a_health", "week", "Run three times this week", "g_10k"),
+    goal("g_shoes", "a_health", "day", "Sort out running gear", "g_week", `${addDays(today, -1)}T18:00:00.000Z`),
+    goal("g_lead", "a_career", "5y", "Lead a team"),
+    goal("g_course", "a_career", "year", "Finish a management course", "g_lead"),
+  ];
   const tasks = [
     task("t_dentist", "Book the dentist", today, { dueTime: "10:00", remindAt: `${today}T09:45`, tags: ["health"] }),
-    task("t_shoes", "Replace running shoes", addDays(today, -1), { tags: ["fitness"] }),
+    task("t_shoes", "Replace running shoes", addDays(today, -1), { tags: ["fitness"], goalId: "g_week" }),
+    task("t_run1", "Easy 5k run", addDays(today, -2), { tags: ["fitness"], goalId: "g_week", doneAt: `${addDays(today, -2)}T07:30:00.000Z` }),
+    task("t_run2", "Intervals at the track", addDays(today, 2), { tags: ["fitness"], goalId: "g_week" }),
+    task("t_enrol", "Pick a management course", addDays(today, 5), { goalId: "g_course" }),
     task("t_trip", "Pack for the weekend", addDays(today, 3), { notes: "Charger, book, rain jacket", tags: ["travel"] }),
     task("t_tax", "Send tax documents", addDays(today, 9)),
     task("t_library", "Return library books", null, { tags: ["mind"] }),
@@ -87,5 +108,5 @@ export function sampleData(today = todayKey()): { habits: Habit[]; tags: Tag[]; 
     ev("g6", "holidays", "Public holiday", addDays(today, 7), null, null),
   ];
   const settings = { "google.events": JSON.stringify({ fetchedAt: now, events, calendars }) };
-  return { habits, tags, days, entries, tasks, settings };
+  return { habits, tags, days, entries, tasks, areas, goals, settings };
 }

@@ -4,6 +4,7 @@ import { dayStats } from "../domain/stats";
 import { getHabitType } from "../habitTypes";
 import { blankTask, useStore } from "../store";
 import { EventList } from "./EventList";
+import { Ring } from "./Ring";
 import { TaskItem } from "./TaskItem";
 
 interface Props {
@@ -15,17 +16,6 @@ interface Props {
   entries: Record<string, HabitEntry>;
   tagFilter: string | null;
   onOpen: (date: string) => void;
-}
-
-function Ring({ pct }: { pct: number }) {
-  const c = 2 * Math.PI * 22;
-  return (
-    <svg viewBox="0 0 56 56" width="56" height="56" aria-hidden="true">
-      <circle cx="28" cy="28" r="22" fill="none" stroke="var(--line)" strokeWidth="6" />
-      <circle cx="28" cy="28" r="22" fill="none" stroke="var(--accent)" strokeWidth="6" strokeLinecap="round"
-        strokeDasharray={`${c * pct} ${c}`} transform="rotate(-90 28 28)" />
-    </svg>
-  );
 }
 
 /** The selected day's habits, journal and tags, shown beside the calendar. */

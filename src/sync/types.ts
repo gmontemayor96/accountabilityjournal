@@ -1,4 +1,4 @@
-import type { Day, Habit, HabitEntry, Tag, Task } from "../domain/model";
+import type { Area, Day, Goal, Habit, HabitEntry, Tag, Task } from "../domain/model";
 import type { EventCache } from "../google/events";
 
 /** A record plus the time it last changed on whichever device changed it. */
@@ -7,12 +7,12 @@ export interface Stamped<T> {
   updatedAt: string; // ISO timestamp
 }
 
-export type TombstoneKind = "tag" | "entry" | "task";
+export type TombstoneKind = "tag" | "entry" | "task" | "area" | "goal";
 
 /** Left behind when a tag or an entry is deleted, so other devices delete it too. */
 export interface Tombstone {
   kind: TombstoneKind;
-  key: string; // tag or task id, or `${habitId}|${date}` for an entry
+  key: string; // tag, task, area or goal id, or `${habitId}|${date}` for an entry
   deletedAt: string;
 }
 
@@ -24,6 +24,9 @@ export interface SyncData {
   entries: Stamped<HabitEntry>[];
   /** Missing in files from versions before tasks. */
   tasks?: Stamped<Task>[];
+  /** Missing in files from versions before goals. */
+  areas?: Stamped<Area>[];
+  goals?: Stamped<Goal>[];
   tombstones: Tombstone[];
 }
 
@@ -44,5 +47,5 @@ export interface SyncFile {
 export const entryKey = (e: { habitId: string; date: string }) => `${e.habitId}|${e.date}`;
 
 export function emptySyncData(): SyncData {
-  return { habits: [], tags: [], days: [], entries: [], tasks: [], tombstones: [] };
+  return { habits: [], tags: [], days: [], entries: [], tasks: [], areas: [], goals: [], tombstones: [] };
 }

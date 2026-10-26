@@ -124,7 +124,7 @@ describe("sync", () => {
     a.clock.set("2026-10-20T10:00:00Z");
     await a.repo.saveTag({ id: "mind", name: "mind", color: "#9B6BD6" });
     const task = { id: "t1", title: "Call the dentist", notes: "", dueDate: "2026-10-27", dueTime: "09:00", remindAt: "2026-10-27T08:45",
-      doneAt: null, createdAt: "2026-10-20T10:00:00.000Z", tags: ["mind"] };
+      doneAt: null, createdAt: "2026-10-20T10:00:00.000Z", tags: ["mind"], goalId: null };
     await a.repo.saveTask(task);
     await a.repo.saveTask({ ...task, id: "t2", title: "Buy stamps", dueDate: null, dueTime: null, remindAt: null, tags: [] });
     await pull(b.repo, a.repo);
@@ -141,6 +141,34 @@ describe("sync", () => {
     for (const r of [a.repo, b.repo]) {
       const tasks = await r.loadTasks();
       expect(tasks.map((t) => [t.id, t.doneAt, t.tags])).toEqual([["t1", "2026-10-21T10:00:00.000Z", []]]);
+    }
+  });
+
+  it("syncs areas and goals, and deleting an area takes its goals and links with it", async () => {
+    const a = device(), b = device();
+    a.clock.set("2026-10-20T10:00:00Z");
+    await a.repo.saveArea({ id: "health", name: "Health", color: "#2FA37A", sortOrder: 0, createdAt: "2026-10-20T10:00:00Z" });
+    const goal = { id: "g1", areaId: "health", parentId: null, title: "Run a marathon", notes: "", horizon: "year" as const, doneAt: null, createdAt: "x" };
+    await a.repo.saveGoal(goal);
+    await a.repo.saveGoal({ ...goal, id: "g2", title: "Run 10k", horizon: "month", parentId: "g1" });
+    await a.repo.saveTask({ id: "t1", title: "Long run", notes: "", dueDate: null, dueTime: null, remindAt: null, doneAt: null, createdAt: "x", tags: [], goalId: "g2" });
+    await pull(b.repo, a.repo);
+    expect((await b.repo.loadGoals()).map((g) => [g.id, g.parentId])).toEqual([["g1", null], ["g2", "g1"]]);
+    expect((await b.repo.loadTasks())[0].goalId).toBe("g2");
+
+    b.clock.set("2026-10-21T10:00:00Z");
+    await b.repo.deleteGoal("g1");
+    expect((await b.repo.loadGoals()).map((g) => [g.id, g.parentId])).toEqual([["g2", null]]);
+    await pull(a.repo, b.repo);
+    expect((await a.repo.loadGoals()).map((g) => [g.id, g.parentId])).toEqual([["g2", null]]);
+
+    a.clock.set("2026-10-22T10:00:00Z");
+    await a.repo.deleteArea("health");
+    await pull(b.repo, a.repo);
+    for (const r of [a.repo, b.repo]) {
+      expect(await r.loadAreas()).toEqual([]);
+      expect(await r.loadGoals()).toEqual([]);
+      expect((await r.loadTasks())[0].goalId).toBeNull();
     }
   });
 
@@ -167,6 +195,7 @@ describe("sync", () => {
              VALUES ('h1', '2026-01-02', 1, '', '{}', '2026-01-02T09:00:00Z')`);
     db.exec(migration("002_sync.sql"));
     db.exec(migration("003_tasks.sql"));
+    db.exec(migration("004_goals.sql"));
     const snap = await new SqliteRepo(driverFor(db)).snapshot();
     expect(snap.habits[0].updatedAt).toBe("2026-01-01T00:00:00Z");
     expect(snap.entries[0].updatedAt).toBe("2026-01-02T09:00:00Z");

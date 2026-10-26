@@ -1,4 +1,4 @@
-import { emptyDay, type Day, type Habit, type HabitEntry, type HabitField, type Schedule, type Tag, type Task } from "../domain/model";
+import { emptyDay, type Area, type Day, type Goal, type Habit, type HabitEntry, type HabitField, type Horizon, type Schedule, type Tag, type Task } from "../domain/model";
 import { entryKey, type SyncChanges, type SyncData, type Tombstone } from "../sync/types";
 import type { Repo } from "./repo";
 
@@ -16,7 +16,12 @@ interface HabitRow {
 interface FieldRow { id: string; habit_id: string; label: string; kind: HabitField["kind"] }
 interface TaskRow {
   id: string; title: string; notes: string; due_date: string | null; due_time: string | null;
-  remind_at: string | null; done_at: string | null; created_at: string; updated_at: string;
+  remind_at: string | null; done_at: string | null; created_at: string; updated_at: string; goal_id: string | null;
+}
+interface AreaRow { id: string; name: string; color: string; sort_order: number; created_at: string; updated_at: string }
+interface GoalRow {
+  id: string; area_id: string; parent_id: string | null; title: string; notes: string; horizon: Horizon;
+  done_at: string | null; created_at: string; updated_at: string;
 }
 interface EntryRow { habit_id: string; date: string; value: number | null; note: string; fields: string; logged_at: string }
 
@@ -141,6 +146,7 @@ export class SqliteRepo implements Repo {
       task: {
         id: r.id, title: r.title, notes: r.notes ?? "", dueDate: r.due_date, dueTime: r.due_time, remindAt: r.remind_at,
         doneAt: r.done_at, createdAt: r.created_at, tags: tags.filter((t) => t.task_id === r.id).map((t) => t.tag_id),
+        goalId: r.goal_id ?? null,
       },
     }));
   }
@@ -151,11 +157,12 @@ export class SqliteRepo implements Repo {
 
   private async writeTask(t: Task, updatedAt: string): Promise<void> {
     await this.db.execute(
-      `INSERT INTO task (id, title, notes, due_date, due_time, remind_at, done_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO task (id, title, notes, due_date, due_time, remind_at, done_at, created_at, updated_at, goal_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET title = excluded.title, notes = excluded.notes, due_date = excluded.due_date,
-         due_time = excluded.due_time, remind_at = excluded.remind_at, done_at = excluded.done_at, updated_at = excluded.updated_at`,
-      [t.id, t.title, t.notes, t.dueDate, t.dueTime, t.remindAt, t.doneAt, t.createdAt, updatedAt],
+         due_time = excluded.due_time, remind_at = excluded.remind_at, done_at = excluded.done_at, updated_at = excluded.updated_at,
+         goal_id = excluded.goal_id`,
+      [t.id, t.title, t.notes, t.dueDate, t.dueTime, t.remindAt, t.doneAt, t.createdAt, updatedAt, t.goalId ?? null],
     );
     await this.db.execute("DELETE FROM task_tag WHERE task_id = ?", [t.id]);
     for (const tagId of t.tags) {
@@ -171,6 +178,90 @@ export class SqliteRepo implements Repo {
   private async removeTask(t: Tombstone): Promise<void> {
     await this.db.execute("DELETE FROM task_tag WHERE task_id = ?", [t.key]);
     await this.db.execute("DELETE FROM task WHERE id = ?", [t.key]);
+    await this.writeTombstone(t);
+  }
+
+  private async areaRows(): Promise<{ area: Area; updatedAt: string }[]> {
+    const rows = await this.db.select<AreaRow>("SELECT * FROM area ORDER BY sort_order, created_at");
+    return rows.map((r) => ({
+      updatedAt: r.updated_at || EARLY,
+      area: { id: r.id, name: r.name, color: r.color, sortOrder: r.sort_order, createdAt: r.created_at },
+    }));
+  }
+
+  async loadAreas(): Promise<Area[]> {
+    return (await this.areaRows()).map(({ area }) => area);
+  }
+
+  async saveArea(a: Area): Promise<void> {
+    await this.writeArea(a, this.now());
+  }
+
+  private async writeArea(a: Area, updatedAt: string): Promise<void> {
+    await this.db.execute(
+      `INSERT INTO area (id, name, color, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET name = excluded.name, color = excluded.color, sort_order = excluded.sort_order,
+         updated_at = excluded.updated_at`,
+      [a.id, a.name, a.color, a.sortOrder, a.createdAt, updatedAt],
+    );
+    await this.db.execute("DELETE FROM tombstone WHERE kind = 'area' AND key = ?", [a.id]);
+  }
+
+  async deleteArea(id: string): Promise<void> {
+    const at = this.now();
+    for (const g of await this.db.select<{ id: string }>("SELECT id FROM goal WHERE area_id = ?", [id])) {
+      await this.removeGoal({ kind: "goal", key: g.id, deletedAt: at });
+    }
+    await this.removeArea({ kind: "area", key: id, deletedAt: at });
+  }
+
+  private async removeArea(t: Tombstone): Promise<void> {
+    // Goals of the area that only this device had go too; their own tombstones were sent with the area's.
+    for (const g of await this.db.select<{ id: string }>("SELECT id FROM goal WHERE area_id = ?", [t.key])) {
+      await this.removeGoal({ kind: "goal", key: g.id, deletedAt: t.deletedAt });
+    }
+    await this.db.execute("DELETE FROM area WHERE id = ?", [t.key]);
+    await this.writeTombstone(t);
+  }
+
+  private async goalRows(): Promise<{ goal: Goal; updatedAt: string }[]> {
+    const rows = await this.db.select<GoalRow>("SELECT * FROM goal ORDER BY created_at");
+    return rows.map((r) => ({
+      updatedAt: r.updated_at || EARLY,
+      goal: {
+        id: r.id, areaId: r.area_id, parentId: r.parent_id, title: r.title, notes: r.notes ?? "", horizon: r.horizon,
+        doneAt: r.done_at, createdAt: r.created_at,
+      },
+    }));
+  }
+
+  async loadGoals(): Promise<Goal[]> {
+    return (await this.goalRows()).map(({ goal }) => goal);
+  }
+
+  async saveGoal(g: Goal): Promise<void> {
+    await this.writeGoal(g, this.now());
+  }
+
+  private async writeGoal(g: Goal, updatedAt: string): Promise<void> {
+    await this.db.execute(
+      `INSERT INTO goal (id, area_id, parent_id, title, notes, horizon, done_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET area_id = excluded.area_id, parent_id = excluded.parent_id, title = excluded.title,
+         notes = excluded.notes, horizon = excluded.horizon, done_at = excluded.done_at, updated_at = excluded.updated_at`,
+      [g.id, g.areaId, g.parentId, g.title, g.notes, g.horizon, g.doneAt, g.createdAt, updatedAt],
+    );
+    await this.db.execute("DELETE FROM tombstone WHERE kind = 'goal' AND key = ?", [g.id]);
+  }
+
+  async deleteGoal(id: string): Promise<void> {
+    await this.removeGoal({ kind: "goal", key: id, deletedAt: this.now() });
+  }
+
+  // Links are cleared without new timestamps: every device does the same when the tombstone arrives.
+  private async removeGoal(t: Tombstone): Promise<void> {
+    await this.db.execute("UPDATE goal SET parent_id = NULL WHERE parent_id = ?", [t.key]);
+    await this.db.execute("UPDATE task SET goal_id = NULL WHERE goal_id = ?", [t.key]);
+    await this.db.execute("DELETE FROM goal WHERE id = ?", [t.key]);
     await this.writeTombstone(t);
   }
 
@@ -260,6 +351,8 @@ export class SqliteRepo implements Repo {
       days: days.map((data) => ({ data, updatedAt: dayAt.get(data.date) ?? EARLY })),
       entries: entries.map((data) => ({ data, updatedAt: entryAt.get(entryKey(data)) ?? EARLY })),
       tasks: (await this.taskRows()).map(({ task, updatedAt }) => ({ data: task, updatedAt })),
+      areas: (await this.areaRows()).map(({ area, updatedAt }) => ({ data: area, updatedAt })),
+      goals: (await this.goalRows()).map(({ goal, updatedAt }) => ({ data: goal, updatedAt })),
       tombstones: tombstones.map((t) => ({ kind: t.kind, key: t.key, deletedAt: t.deleted_at })),
     };
   }
@@ -280,10 +373,20 @@ export class SqliteRepo implements Repo {
     const known = (ids: string[]) => ids.filter((id) => tagIds.has(id));
     await each(c.habits, (r) => this.writeHabit({ ...r.data, tags: known(r.data.tags) }, r.updatedAt));
     await each(c.days, (r) => this.writeDay({ ...r.data, tags: known(r.data.tags) }, r.updatedAt));
+    await each(c.areas ?? [], (r) => this.writeArea(r.data, r.updatedAt));
+    await each(c.goals ?? [], (r) => this.writeGoal(r.data, r.updatedAt));
     await each(c.tasks ?? [], (r) => this.writeTask({ ...r.data, tags: known(r.data.tags) }, r.updatedAt));
     const habitIds = new Set((await this.db.select<{ id: string }>("SELECT id FROM habit")).map((h) => h.id));
     await each(c.entries.filter((r) => habitIds.has(r.data.habitId)), (r) => this.writeEntry(r.data, r.updatedAt));
-    await each(c.tombstones, (t) => (t.kind === "tag" ? this.removeTag(t) : t.kind === "task" ? this.removeTask(t) : this.removeEntry(t)));
+    // Goals before areas, so an area's own goals are already gone with their own timestamps.
+    const order: Tombstone["kind"][] = ["tag", "task", "entry", "goal", "area"];
+    const tombstones = [...c.tombstones].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
+    await each(tombstones, (t) =>
+      t.kind === "tag" ? this.removeTag(t)
+        : t.kind === "task" ? this.removeTask(t)
+          : t.kind === "goal" ? this.removeGoal(t)
+            : t.kind === "area" ? this.removeArea(t)
+              : this.removeEntry(t));
   }
 
   async getSetting(key: string): Promise<string | null> {

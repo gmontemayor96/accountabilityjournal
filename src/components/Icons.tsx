@@ -8,6 +8,7 @@ export const Icons = {
   tags: <svg viewBox="0 0 16 16" {...s}><path d="M1.8 8.6V2.2a.4.4 0 0 1 .4-.4h6.4l5.6 5.6-6.8 6.8z" /><circle cx="5" cy="5" r="1" /></svg>,
   sync: <svg viewBox="0 0 16 16" {...s}><path d="M13.5 6.5A5.5 5.5 0 0 0 3.2 5M2.5 9.5A5.5 5.5 0 0 0 12.8 11" /><path d="M3 2v3h3M13 14v-3h-3" /></svg>,
   tasks: <svg viewBox="0 0 16 16" {...s}><rect x="2" y="2" width="12" height="12" rx="2" /><path d="m5 8 2 2 4-4" /></svg>,
+  goals: <svg viewBox="0 0 16 16" {...s}><circle cx="8" cy="8" r="6" /><circle cx="8" cy="8" r="3" /><circle cx="8" cy="8" r=".6" /></svg>,
   check: <svg viewBox="0 0 16 16" width="12" height="12" {...s} strokeWidth={2.2}><path d="m3.5 8.5 3 3 6-7" /></svg>,
   bell: <svg viewBox="0 0 16 16" width="12" height="12" {...s}><path d="M4 11V7a4 4 0 0 1 8 0v4l1.2 1.5H2.8zM6.5 14h3" /></svg>,
   edit: <svg viewBox="0 0 16 16" width="14" height="14" {...s}><path d="M10.5 2.5l3 3L6 13H3v-3z" /></svg>,

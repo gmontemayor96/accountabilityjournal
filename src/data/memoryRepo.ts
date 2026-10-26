@@ -1,4 +1,4 @@
-import { emptyDay, type Day, type Habit, type HabitEntry, type Tag, type Task } from "../domain/model";
+import { emptyDay, type Area, type Day, type Goal, type Habit, type HabitEntry, type Tag, type Task } from "../domain/model";
 import { entryKey, type SyncChanges, type SyncData, type Tombstone } from "../sync/types";
 import type { Repo } from "./repo";
 
@@ -8,12 +8,20 @@ interface Snapshot {
   days: Record<string, Day>;
   entries: Record<string, HabitEntry>; // key: `${habitId}|${date}`
   tasks?: Task[];
+  areas?: Area[];
+  goals?: Goal[];
   updated?: Record<string, string>; // key: `${kind}:${key}` -> last change
   tombstones?: Tombstone[];
   settings?: Record<string, string>;
 }
 
 const EARLY = "2000-01-01T00:00:00.000Z";
+
+function upsert<T extends { id: string }>(list: T[], item: T) {
+  const i = list.findIndex((x) => x.id === item.id);
+  if (i >= 0) list[i] = item;
+  else list.push(item);
+}
 
 /**
  * Keeps data in memory, optionally mirrored to localStorage. Used when the UI runs
@@ -110,6 +118,41 @@ export class MemoryRepo implements Repo {
     this.bury({ kind: "task", key: id, deletedAt: new Date().toISOString() });
     this.persist();
   }
+  async loadAreas() {
+    return structuredClone(this.s.areas ?? []).sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt));
+  }
+  async saveArea(a: Area) {
+    upsert((this.s.areas ??= []), structuredClone(a));
+    this.stamp("area", a.id);
+    this.persist();
+  }
+  async deleteArea(id: string) {
+    this.removeArea({ kind: "area", key: id, deletedAt: new Date().toISOString() });
+    this.persist();
+  }
+  private removeArea(t: Tombstone) {
+    for (const g of (this.s.goals ?? []).filter((g) => g.areaId === t.key)) this.removeGoal({ kind: "goal", key: g.id, deletedAt: t.deletedAt });
+    this.s.areas = (this.s.areas ?? []).filter((a) => a.id !== t.key);
+    this.bury(t);
+  }
+  async loadGoals() {
+    return structuredClone(this.s.goals ?? []).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+  async saveGoal(g: Goal) {
+    upsert((this.s.goals ??= []), structuredClone(g));
+    this.stamp("goal", g.id);
+    this.persist();
+  }
+  async deleteGoal(id: string) {
+    this.removeGoal({ kind: "goal", key: id, deletedAt: new Date().toISOString() });
+    this.persist();
+  }
+  private removeGoal(t: Tombstone) {
+    for (const g of this.s.goals ?? []) if (g.parentId === t.key) g.parentId = null;
+    for (const x of this.s.tasks ?? []) if (x.goalId === t.key) x.goalId = null;
+    this.s.goals = (this.s.goals ?? []).filter((g) => g.id !== t.key);
+    this.bury(t);
+  }
   async loadRange(from: string, to: string) {
     const inRange = (d: string) => d >= from && d <= to;
     return {
@@ -149,6 +192,8 @@ export class MemoryRepo implements Repo {
       days: Object.values(this.s.days).map((data) => ({ data, updatedAt: this.at("day", data.date) })),
       entries: Object.values(this.s.entries).map((data) => ({ data, updatedAt: this.at("entry", entryKey(data)) })),
       tasks: (this.s.tasks ?? []).map((data) => ({ data, updatedAt: this.at("task", data.id) })),
+      areas: (this.s.areas ?? []).map((data) => ({ data, updatedAt: this.at("area", data.id) })),
+      goals: (this.s.goals ?? []).map((data) => ({ data, updatedAt: this.at("goal", data.id) })),
       tombstones: this.s.tombstones ?? [],
     });
   }
@@ -168,6 +213,8 @@ export class MemoryRepo implements Repo {
       this.s.days[r.data.date] = { ...structuredClone(r.data), tags: r.data.tags.filter((t) => tagIds.has(t)) };
       this.stamp("day", r.data.date, r.updatedAt);
     }
+    for (const r of c.areas ?? []) { upsert((this.s.areas ??= []), structuredClone(r.data)); this.stamp("area", r.data.id, r.updatedAt); }
+    for (const r of c.goals ?? []) { upsert((this.s.goals ??= []), structuredClone(r.data)); this.stamp("goal", r.data.id, r.updatedAt); }
     for (const r of c.tasks ?? []) {
       const list = (this.s.tasks ??= []);
       const task = { ...structuredClone(r.data), tags: r.data.tags.filter((t) => tagIds.has(t)) };
@@ -182,8 +229,11 @@ export class MemoryRepo implements Repo {
       this.s.entries[entryKey(r.data)] = structuredClone(r.data);
       this.stamp("entry", entryKey(r.data), r.updatedAt);
     }
-    for (const t of c.tombstones) {
+    const order: Tombstone["kind"][] = ["tag", "task", "entry", "goal", "area"];
+    for (const t of [...c.tombstones].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind))) {
       if (t.kind === "tag") this.removeTag(t);
+      else if (t.kind === "goal") this.removeGoal(t);
+      else if (t.kind === "area") this.removeArea(t);
       else if (t.kind === "task") { this.s.tasks = (this.s.tasks ?? []).filter((x) => x.id !== t.key); this.bury(t); }
       else { delete this.s.entries[t.key]; this.bury(t); }
     }
