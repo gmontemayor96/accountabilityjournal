@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { HabitEditor } from "./components/HabitEditor";
+import { GoalEditor } from "./components/GoalEditor";
 import { TaskEditor } from "./components/TaskEditor";
 import { Icons } from "./components/Icons";
 import { isDesktopApp } from "./data";
 import type { Habit } from "./domain/model";
 import { DayScreen } from "./screens/DayScreen";
+import { GoalsScreen } from "./screens/GoalsScreen";
 import { HabitsScreen } from "./screens/HabitsScreen";
 import { CalendarScreen } from "./screens/CalendarScreen";
 import { JournalScreen } from "./screens/JournalScreen";
@@ -16,6 +18,7 @@ import { blankHabit, useStore, type View } from "./store";
 const NAV: { view: View; label: string; icon: keyof typeof Icons }[] = [
   { view: "day", label: "Today", icon: "day" },
   { view: "tasks", label: "Tasks", icon: "tasks" },
+  { view: "goals", label: "Goals", icon: "goals" },
   { view: "habits", label: "Habits", icon: "habits" },
   { view: "calendar", label: "Calendar", icon: "calendar" },
   { view: "journal", label: "Journal", icon: "journal" },
@@ -24,7 +27,7 @@ const NAV: { view: View; label: string; icon: keyof typeof Icons }[] = [
 ];
 
 export default function App() {
-  const { status, error, view, setView, init, habits, editingTask, editTask } = useStore();
+  const { status, error, view, setView, init, habits, editingTask, editTask, editingGoal, editGoal } = useStore();
   const [editing, setEditing] = useState<Habit | null>(null);
 
   useEffect(() => {
@@ -37,7 +40,7 @@ export default function App() {
     <div className="app">
       <nav className="rail" aria-label="Sections">
         <div className="brand">
-          Identity<small>Habits, tasks and journal</small>
+          Identity<small>Habits, goals and journal</small>
         </div>
         {NAV.map((n) => (
           <button key={n.view} className="nav" aria-current={view === n.view ? "page" : undefined} onClick={() => setView(n.view)}>
@@ -58,6 +61,7 @@ export default function App() {
         )}
         {status === "ready" && view === "day" && <DayScreen onEditHabit={openEditor} />}
         {status === "ready" && view === "tasks" && <TasksScreen />}
+        {status === "ready" && view === "goals" && <GoalsScreen />}
         {status === "ready" && view === "habits" && <HabitsScreen onEditHabit={openEditor} />}
         {status === "ready" && view === "calendar" && <CalendarScreen />}
         {status === "ready" && view === "journal" && <JournalScreen />}
@@ -65,6 +69,7 @@ export default function App() {
         {status === "ready" && view === "sync" && <SyncScreen />}
       </main>
       {editing && <HabitEditor habit={editing} onClose={() => setEditing(null)} />}
+      {editingGoal && <GoalEditor goal={editingGoal} onClose={() => editGoal(null)} />}
       {editingTask && <TaskEditor key={editingTask.id} task={editingTask} onClose={() => editTask(null)} />}
     </div>
   );

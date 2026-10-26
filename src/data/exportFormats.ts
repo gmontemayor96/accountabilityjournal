@@ -21,7 +21,7 @@ export function parseBackup(text: string): SyncData | null {
     if ((f.format !== "identity-backup" && f.format !== "identity-sync") || f.version !== 1 || !f.data) return null;
     const d = f.data;
     return Array.isArray(d.habits) && Array.isArray(d.tags) && Array.isArray(d.days) && Array.isArray(d.entries) && Array.isArray(d.tombstones)
-      ? { ...d, tasks: Array.isArray(d.tasks) ? d.tasks : [] } : null;
+      ? { ...d, tasks: Array.isArray(d.tasks) ? d.tasks : [], areas: Array.isArray(d.areas) ? d.areas : [], goals: Array.isArray(d.goals) ? d.goals : [] } : null;
   } catch {
     return null;
   }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Task } from "../domain/model";
+import { HORIZONS, horizonLabel } from "../domain/goals";
 import { useStore } from "../store";
 import { DEFAULT_TIME, ensurePermission, REMIND_OPTIONS, reminderFor, reminderKey, type RemindKey } from "../tasks/reminders";
 import { isDesktopApp } from "../data";
@@ -7,7 +8,8 @@ import { Icons } from "./Icons";
 import { TagPicker } from "./TagPicker";
 
 export function TaskEditor({ task, onClose }: { task: Task; onClose: () => void }) {
-  const { tasks, tags, saveTask, deleteTask, createTag } = useStore();
+  const { tasks, tags, areas, goals, saveTask, deleteTask, createTag } = useStore();
+  const rank = (h: string) => HORIZONS.findIndex((x) => x.key === h);
   const isNew = !tasks.some((t) => t.id === task.id);
   const [d, setD] = useState<Task>(() => structuredClone(task));
   const [remind, setRemind] = useState<RemindKey>(() => reminderKey(task));
@@ -91,6 +93,23 @@ export function TaskEditor({ task, onClose }: { task: Task; onClose: () => void 
             </div>
             {remind && remind !== "custom" && !d.dueTime && d.dueDate && <span className="hint">No time set, so the reminder uses {DEFAULT_TIME}.</span>}
           </div>
+          {goals.length > 0 && (
+            <div className="field">
+              <label className="label" htmlFor="task-goal">Goal</label>
+              <select id="task-goal" value={goals.some((g) => g.id === d.goalId) ? d.goalId! : ""} onChange={(e) => update({ goalId: e.target.value || null })}>
+                <option value="">No goal</option>
+                {areas.map((a) => {
+                  const list = goals.filter((g) => g.areaId === a.id).sort((x, y) => rank(x.horizon) - rank(y.horizon) || x.title.localeCompare(y.title));
+                  return list.length ? (
+                    <optgroup key={a.id} label={a.name}>
+                      {list.map((g) => <option key={g.id} value={g.id}>{horizonLabel(g.horizon)}: {g.title}</option>)}
+                    </optgroup>
+                  ) : null;
+                })}
+              </select>
+              <span className="hint">Finishing the task counts toward that goal's progress.</span>
+            </div>
+          )}
           <div className="field">
             <span className="label">Tags</span>
             <TagPicker inputId="task-new-tag" tags={tags} selected={d.tags} onToggle={toggleTag} onCreate={createTag} />

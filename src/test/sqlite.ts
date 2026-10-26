@@ -20,5 +20,6 @@ export function memoryDriver(): SqlDriver {
   db.exec(migration("001_init.sql"));
   db.exec(migration("002_sync.sql"));
   db.exec(migration("003_tasks.sql"));
+  db.exec(migration("004_goals.sql"));
   return driverFor(db);
 }

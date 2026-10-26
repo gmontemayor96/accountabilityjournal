@@ -1,4 +1,4 @@
-import type { Day, Habit, HabitEntry, Tag, Task } from "../domain/model";
+import type { Area, Day, Goal, Habit, HabitEntry, Tag, Task } from "../domain/model";
 import type { SyncChanges, SyncData } from "../sync/types";
 
 /** Everything the app reads and writes. Screens never talk to storage directly. */
@@ -20,6 +20,15 @@ export interface Repo {
   loadTasks(): Promise<Task[]>;
   saveTask(task: Task): Promise<void>;
   deleteTask(id: string): Promise<void>;
+
+  loadAreas(): Promise<Area[]>;
+  saveArea(area: Area): Promise<void>;
+  /** Deletes the area and its goals, and unlinks their tasks. */
+  deleteArea(id: string): Promise<void>;
+  loadGoals(): Promise<Goal[]>;
+  saveGoal(goal: Goal): Promise<void>;
+  /** Deletes the goal; its subgoals lose their parent and its tasks their goal. */
+  deleteGoal(id: string): Promise<void>;
 
   /** Every day row and entry between two dates, inclusive. Days with nothing saved are left out. */
   loadRange(from: string, to: string): Promise<{ days: Day[]; entries: HabitEntry[] }>;

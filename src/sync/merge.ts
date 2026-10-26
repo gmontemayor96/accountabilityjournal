@@ -1,7 +1,7 @@
 import { entryKey, emptySyncData, type Stamped, type SyncChanges, type SyncData, type Tombstone } from "./types";
 
 type Item =
-  | { kind: "habit" | "tag" | "day" | "entry" | "task"; key: string; at: string; record: Stamped<unknown> }
+  | { kind: "habit" | "tag" | "day" | "entry" | "task" | "area" | "goal"; key: string; at: string; record: Stamped<unknown> }
   | { kind: Tombstone["kind"]; key: string; at: string; tombstone: Tombstone };
 
 function items(d: SyncData): Map<string, Item> {
@@ -16,6 +16,8 @@ function items(d: SyncData): Map<string, Item> {
   for (const r of d.days) put({ kind: "day", key: r.data.date, at: r.updatedAt, record: r });
   for (const r of d.entries) put({ kind: "entry", key: entryKey(r.data), at: r.updatedAt, record: r });
   for (const r of d.tasks ?? []) put({ kind: "task", key: r.data.id, at: r.updatedAt, record: r });
+  for (const r of d.areas ?? []) put({ kind: "area", key: r.data.id, at: r.updatedAt, record: r });
+  for (const r of d.goals ?? []) put({ kind: "goal", key: r.data.id, at: r.updatedAt, record: r });
   for (const t of d.tombstones) put({ kind: t.kind, key: t.key, at: t.deletedAt, tombstone: t });
   return out;
 }
@@ -43,6 +45,8 @@ export function planMerge(local: SyncData, remotes: SyncData[]): SyncChanges {
     else if (item.kind === "tag") changes.tags.push(item.record as SyncChanges["tags"][number]);
     else if (item.kind === "day") changes.days.push(item.record as SyncChanges["days"][number]);
     else if (item.kind === "task") changes.tasks!.push(item.record as NonNullable<SyncChanges["tasks"]>[number]);
+    else if (item.kind === "area") changes.areas!.push(item.record as NonNullable<SyncChanges["areas"]>[number]);
+    else if (item.kind === "goal") changes.goals!.push(item.record as NonNullable<SyncChanges["goals"]>[number]);
     else changes.entries.push(item.record as SyncChanges["entries"][number]);
   }
   return changes;
@@ -53,5 +57,5 @@ export function isEmpty(c: SyncChanges): boolean {
 }
 
 export function changeCount(c: SyncChanges): number {
-  return c.habits.length + c.tags.length + c.days.length + c.entries.length + (c.tasks?.length ?? 0) + c.tombstones.length;
+  return c.habits.length + c.tags.length + c.days.length + c.entries.length + (c.tasks?.length ?? 0) + (c.areas?.length ?? 0) + (c.goals?.length ?? 0) + c.tombstones.length;
 }

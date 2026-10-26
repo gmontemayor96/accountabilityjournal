@@ -20,6 +20,7 @@ Milestones 1 and 2 of 4 (see the [product and architecture spec](https://claude.
 - [x] Streaks: current and best, on Today and Habits (per-week habits count weeks)
 - [x] Daily automatic backups (last 30 kept), restore from any of them
 - [x] Export to JSON (re-importable) and CSV (habit log and journal), import JSON
+- [x] Goals: areas of life with 1 day to 10 year goals, subgoals, linked tasks and progress
 - [x] Google Calendar: dated tasks go to an "Identity" calendar; your Google events show (read-only) on Today and the calendar
 - [x] Tasks: one-off to-dos with a due date and time, tags, notes and a reminder; shown on Today and the calendar, synced
 
@@ -57,6 +58,12 @@ The alias must be `identity`, and both passwords must be the same, because the b
 **4. Build and reinstall once.** Re-run the latest **Build Android app** workflow (open it under **Actions**, then **Re-run all jobs**), or push any change. If the "No ANDROID_KEYSTORE secret" warning is gone from the run, signing worked. The app on your phone still has the old one-off key, so uninstall it once and install the new APK. From then on, every new APK installs straight over the last one.
 
 **Keep `identity.jks` and its password somewhere safe**, such as a password manager, and never commit it: this repository is public. If you lose it, you can make a new one, but the next update will need one more uninstall.
+
+## Goals
+
+Open **Goals** and add an area of your life, such as Health, Career or Money. Each area has six buckets of goals: 1 day, 1 week, 1 month, 1 year, 5 years and 10 years. A goal can be a step toward a longer goal in the same area (a 1 month "Run 10k" toward a 1 year "Run a half marathon"), and any task can count toward a goal through its **Goal** field.
+
+A goal's subgoals and linked tasks are its steps. Each card shows how many steps are done, such as 2/4, and the percentage, which counts a half-done subgoal as half a step. A goal with steps completes itself when they are all done; one without steps you tick off yourself. Goals sync between devices like everything else.
 
 ## Tasks
 

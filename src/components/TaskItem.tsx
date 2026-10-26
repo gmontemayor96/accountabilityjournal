@@ -5,7 +5,9 @@ import { Icons } from "./Icons";
 
 /** One task: a checkbox, its title, when it's due, and its tags. Clicking the title opens the editor. */
 export function TaskItem({ task }: { task: Task }) {
-  const { tags, toggleTask, editTask } = useStore();
+  const { tags, goals, areas, toggleTask, editTask } = useStore();
+  const goal = task.goalId ? goals.find((g) => g.id === task.goalId) : undefined;
+  const area = goal && areas.find((a) => a.id === goal.areaId);
   const overdue = groupOf(task) === "overdue";
   return (
     <div className={`task${task.doneAt ? " done" : ""}`}>
@@ -20,6 +22,7 @@ export function TaskItem({ task }: { task: Task }) {
           {task.tags.map((id) => tags.find((t) => t.id === id)).filter(Boolean).map((t) => (
             <span key={t!.id} className="ttag"><span className="dot" style={{ background: t!.color }} />{t!.name}</span>
           ))}
+          {goal && <span className="tgoal" title="Counts toward this goal">{Icons.goals}<span style={{ color: area?.color }}>{goal.title}</span></span>}
           {task.notes && <span className="tnote">{task.notes.split("\n")[0]}</span>}
         </span>
       </button>

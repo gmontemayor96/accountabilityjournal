@@ -54,6 +54,33 @@ export interface Task {
   doneAt: string | null;
   createdAt: string;
   tags: string[];
+  /** The goal this task moves forward, if any. Missing on tasks saved before goals. */
+  goalId?: string | null;
+}
+
+/** A part of life the user cares about, such as Health or Career. Goals live in one. */
+export interface Area {
+  id: string;
+  name: string;
+  color: string;
+  sortOrder: number;
+  createdAt: string;
+}
+
+/** How far ahead a goal looks. Each area has a bucket of goals for every horizon. */
+export type Horizon = "day" | "week" | "month" | "year" | "5y" | "10y";
+
+export interface Goal {
+  id: string;
+  areaId: string;
+  /** A longer-horizon goal in the same area that this one is a step toward. */
+  parentId: string | null;
+  title: string;
+  notes: string;
+  horizon: Horizon;
+  /** Set when a goal with no subgoals or tasks is ticked off. Goals with them are done when they all are. */
+  doneAt: string | null;
+  createdAt: string;
 }
 
 export interface Tag {
