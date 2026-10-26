@@ -29,6 +29,10 @@ interface State {
   toggleDayTag(tagId: string): void;
 
   createTag(name: string): Promise<string | null>;
+  updateTag(tag: Tag): Promise<void>;
+  deleteTag(id: string): Promise<void>;
+  /** Shows a date on the Today screen. */
+  openDay(date: string): Promise<void>;
   saveHabit(habit: Habit): Promise<void>;
   setArchived(id: string, archived: boolean): Promise<void>;
 }
@@ -132,6 +136,26 @@ export const useStore = create<State>((set, get) => {
         set({ tags: [...tags, tag].sort((a, b) => a.name.localeCompare(b.name)) });
       }
       return id;
+    },
+
+    async updateTag(tag) {
+      await get().repo?.saveTag(tag);
+      set({ tags: get().tags.map((t) => (t.id === tag.id ? tag : t)).sort((a, b) => a.name.localeCompare(b.name)) });
+    },
+
+    async deleteTag(id) {
+      await get().repo?.deleteTag(id);
+      const { tags, habits, day } = get();
+      set({
+        tags: tags.filter((t) => t.id !== id),
+        habits: habits.map((h) => ({ ...h, tags: h.tags.filter((t) => t !== id) })),
+        day: { ...day, tags: day.tags.filter((t) => t !== id) },
+      });
+    },
+
+    async openDay(date) {
+      await get().setDate(date);
+      set({ view: "day" });
     },
 
     async saveHabit(habit) {

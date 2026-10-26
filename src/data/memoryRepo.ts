@@ -60,6 +60,23 @@ export class MemoryRepo implements Repo {
     else this.s.tags.push({ ...t });
     this.persist();
   }
+  async deleteTag(id: string) {
+    this.s.tags = this.s.tags.filter((t) => t.id !== id);
+    for (const h of this.s.habits) h.tags = h.tags.filter((t) => t !== id);
+    for (const d of Object.values(this.s.days)) d.tags = d.tags.filter((t) => t !== id);
+    this.persist();
+  }
+  async loadRange(from: string, to: string) {
+    const inRange = (d: string) => d >= from && d <= to;
+    return {
+      days: structuredClone(Object.values(this.s.days).filter((d) => inRange(d.date))).sort((a, b) => a.date.localeCompare(b.date)),
+      entries: structuredClone(Object.values(this.s.entries).filter((e) => inRange(e.date))),
+    };
+  }
+  async earliestDate() {
+    const dates = [...Object.keys(this.s.days), ...Object.values(this.s.entries).map((e) => e.date)].sort();
+    return dates[0] ?? null;
+  }
   async loadDay(date: string) {
     const entries = Object.values(this.s.entries).filter((e) => e.date === date);
     return { day: structuredClone(this.s.days[date] ?? emptyDay(date)), entries: structuredClone(entries) };

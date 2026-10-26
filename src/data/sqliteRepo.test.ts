@@ -66,4 +66,27 @@ describe("SqliteRepo", () => {
     await repo.saveDay({ date: "2026-10-16", journal: "Good run. Early night.", mood: 4, tags: ["mind"] });
     expect((await repo.loadDay("2026-10-16")).day).toEqual({ date: "2026-10-16", journal: "Good run. Early night.", mood: 4, tags: ["mind"] });
   });
+
+  it("loads a date range with day tags and entries, and finds the earliest date", async () => {
+    expect(await repo.earliestDate()).toBeNull();
+    await repo.saveHabit(run);
+    const e = (date: string) => ({ habitId: run.id, date, value: 30, note: "", fields: {}, loggedAt: `${date}T07:00:00Z` });
+    await repo.saveEntry(e("2026-09-30"));
+    await repo.saveEntry(e("2026-10-02"));
+    await repo.saveDay({ date: "2026-10-01", journal: "Rest day.", mood: 2, tags: [] });
+    await repo.saveDay({ date: "2026-10-03", journal: "", mood: null, tags: ["mind"] });
+    const { days, entries } = await repo.loadRange("2026-10-01", "2026-10-31");
+    expect(days.map((d) => [d.date, d.tags])).toEqual([["2026-10-01", []], ["2026-10-03", ["mind"]]]);
+    expect(entries.map((x) => x.date)).toEqual(["2026-10-02"]);
+    expect(await repo.earliestDate()).toBe("2026-09-30");
+  });
+
+  it("deletes a tag from habits and days", async () => {
+    await repo.saveHabit(run);
+    await repo.saveDay({ date: "2026-10-16", journal: "", mood: null, tags: ["fitness", "mind"] });
+    await repo.deleteTag("fitness");
+    expect((await repo.loadTags()).map((t) => t.id)).toEqual(["mind"]);
+    expect((await repo.loadHabits())[0].tags).toEqual([]);
+    expect((await repo.loadDay("2026-10-16")).day.tags).toEqual(["mind"]);
+  });
 });
