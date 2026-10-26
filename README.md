@@ -41,7 +41,74 @@ Reminders: on Android they are scheduled with the system, so they arrive even wh
 
 The Windows app connects to Google Calendar (Data → Google Calendar). Tasks with a date are copied to a calendar called "Identity" in your Google account (all-day, or 30 minutes at the due time) and kept up to date as you edit, finish (shown with ✓) or delete them. Your primary calendar's events, from 30 days back to 120 days ahead, show read-only under Schedule on Today and on the calendar. The phone gets those events through sync; Google sign-in only runs on the desktop. Edits made to the "Identity" events in Google are overwritten by the app.
 
-Google requires your own sign-in key for a self-built app. The Data screen walks through it: create a Google Cloud project, enable the Google Calendar API, set up the consent screen (External, then Publish so tokens don't expire after 7 days), create a **Desktop app** OAuth client, and paste its client ID and secret into the app. They are stored only in the local database, never in this repository. The app asks for two permissions: managing calendars it creates, and reading your events.
+### Setting up your Google sign-in key
+
+Google only lets an app read and write your calendar once it has its own sign-in key (an OAuth client). This app doesn't ship one, because the repository is public and a key in it could be misused. You make your own once in about ten minutes, and it is free. Do this on the Windows PC.
+
+**1. Create a Google Cloud project**
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) and sign in with the Google account whose calendar you want to use.
+2. If asked, accept the terms of service. No billing account or payment details are needed.
+3. Click the project picker at the top left (next to the Google Cloud logo), then **New project**.
+4. Name it `Identity` (any name works), leave Location as is, and press **Create**.
+5. When it finishes, make sure the project picker shows `Identity` before you continue.
+
+**2. Turn on the Google Calendar API**
+
+1. Open the menu (☰), then **APIs & Services → Library**. You can also search for "Calendar API" in the top search bar.
+2. Click **Google Calendar API**, then **Enable**.
+
+**3. Set up the consent screen**
+
+This is the page Google shows when you connect.
+
+1. Open the menu, then **Google Auth Platform**. In older consoles it is **APIs & Services → OAuth consent screen**.
+2. Press **Get started**, then fill in:
+   - **App name**: `Identity`
+   - **User support email**: your email
+   - **Audience**: **External**. (Internal only exists for Google Workspace organisations.)
+   - **Contact information**: your email
+3. Agree to the user data policy and press **Create**.
+
+**4. Publish the app**
+
+If you skip this, Google treats the app as "testing", and your sign-in stops working after 7 days.
+
+1. In Google Auth Platform, open **Audience**.
+2. Under **Publishing status**, press **Publish app**, then **Confirm**.
+3. Google will say the app needs verification. You don't need it: verification is for apps used by the public, and an unverified app works fine for you. You'll just see a warning when you connect.
+
+You don't need to add scopes under **Data access**. The app asks for exactly two when you connect: "See, create, change, and delete secondary calendars it creates" and "View events on all your calendars".
+
+**5. Create the Desktop client**
+
+1. In Google Auth Platform, open **Clients**, then **Create client**. In older consoles it is **APIs & Services → Credentials → Create credentials → OAuth client ID**.
+2. Set **Application type** to **Desktop app**. Other types such as "Web application" won't work.
+3. Name it `Identity desktop` and press **Create**.
+4. A dialog shows the **Client ID** (ending in `.apps.googleusercontent.com`) and the **Client secret** (starting with `GOCSPX-`). Keep it open, or download the JSON. You can always come back to **Clients** and open the client to see them again.
+
+**6. Connect the app**
+
+1. In Identity, open **Data → Google Calendar**.
+2. Paste the client ID and client secret into their fields.
+3. Press **Connect**. Your browser opens a Google sign-in page.
+4. Choose your account. When Google says **"Google hasn't verified this app"**, click **Advanced**, then **Go to Identity (unsafe)**. It is "unsafe" only because Google hasn't reviewed it; it is your own key.
+5. Tick both permissions and press **Continue**. The browser says you can close the tab, and the app shows "Connected".
+
+The first sync creates a calendar called **Identity** in your Google account, copies your dated tasks into it, and loads your events. After that it syncs every 10 minutes, a few seconds after you change a task, and whenever you press **Sync now**.
+
+The client ID, secret and sign-in tokens are stored only in the app's local database (`identity.db`), never in this repository or the Syncthing sync files. Phones get the events through sync and don't need their own key.
+
+**If something goes wrong**
+
+- **"Access blocked: … has not completed the Google verification process"** (error 403 `access_denied`): the app is still in testing mode. Go back to step 4 and press **Publish app**. Or, under **Audience → Test users**, add your own email.
+- **"redirect_uri_mismatch"** or "invalid request": the client isn't a **Desktop app**. Create a new client of that type (step 5).
+- **"invalid_client"**: the ID or secret was pasted wrong, often with a missing character or an extra space. Copy both again from **Clients**.
+- **"Google Calendar API has not been used in project … or it is disabled"**: do step 2, wait a minute, then press **Sync now**.
+- **It worked, but a week later sync shows "Google sign-in failed: … expired or revoked"**: the app was still in testing mode when you connected. Publish it (step 4), then **Disconnect** and **Connect** again.
+- **"Google didn't grant offline access"**: remove Identity at [myaccount.google.com/connections](https://myaccount.google.com/connections), then press **Connect** again.
+- **The browser didn't open, or you closed it**: press **Connect** again. The app waits up to 5 minutes for the sign-in to finish.
+- **To stop syncing**: press **Disconnect** in the app. To revoke access completely, also remove "Identity" at [myaccount.google.com/connections](https://myaccount.google.com/connections). The **Identity** calendar stays in Google until you delete it there.
 
 ## Backups and export
 
@@ -50,7 +117,7 @@ Open **Data**. A backup of everything is written once a day while the app is ope
 ## Sync
 
 1. In Syncthing, share one folder between your PC and phone (for example `Identity`).
-2. In the app on each device, open **Sync**, choose that folder and press **Save**. On Android, type the folder path shown in Syncthing (such as `/storage/emulated/0/Syncthing/Identity`) and allow **All files access** when asked.
+2. In the app on each device, open **Data**, choose that folder and press **Save**. On Android, type the folder path shown in Syncthing (such as `/storage/emulated/0/Syncthing/Identity`) and allow **All files access** when asked.
 
 Each device writes its own `identity-sync-<device>.json` there and reads the others'. The SQLite file itself is never shared, so Syncthing can't corrupt it. Every habit, tag, day and entry carries the time it last changed; when two devices changed the same thing, the later change wins, and deletions travel as tombstones. Sync runs on start, when the app comes back into view, every minute while open, a few seconds after an edit, and from **Sync now**.
 
