@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Icons } from "../components/Icons";
 import { TagPicker } from "../components/TagPicker";
+import { EventList } from "../components/EventList";
 import { QuickAddTask, TaskItem } from "../components/TaskItem";
 import { addDays, longDate, todayKey } from "../domain/dates";
 import { MOODS, type Habit } from "../domain/model";
@@ -119,6 +120,7 @@ export function DayScreen({ onEditHabit }: { onEditHabit: (h?: Habit) => void })
                 {notDue.map((h) => <HabitRow key={h.id} habit={h} streak={streaks[h.id]} onEdit={onEditHabit} />)}
               </details>
             )}
+            <EventList date={date} heading={<div className="section-h spaced"><h3>Schedule</h3></div>} />
             <div className="section-h spaced"><h3>Tasks</h3></div>
             {dayTasks.map((t) => <TaskItem key={t.id} task={t} />)}
             <QuickAddTask dueDate={date} placeholder={isToday ? "Add a task for today" : "Add a task for this day"} />

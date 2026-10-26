@@ -1,5 +1,6 @@
 import type { Repo } from "../data/repo";
 import { changeCount, isEmpty, planMerge } from "./merge";
+import { G, loadEventCache } from "../google/client";
 import type { SyncFile } from "./types";
 
 /** File access for the sync folder. The desktop and Android apps implement it in Rust. */
@@ -64,13 +65,21 @@ export async function syncOnce(repo: Repo, io: SyncIO, fallbackName: string): Pr
     const changes = planMerge(await repo.snapshot(), peers.map((p) => p.data));
     if (!isEmpty(changes)) await repo.applyChanges(changes);
 
+    // Keep the newest Google events any device has fetched.
+    let googleEvents = await loadEventCache(repo);
+    for (const p of peers) {
+      if (p.googleEvents && (!googleEvents || p.googleEvents.fetchedAt > googleEvents.fetchedAt)) googleEvents = p.googleEvents;
+    }
+    if (googleEvents) await repo.setSetting(G.events, JSON.stringify(googleEvents));
+
     const data = await repo.snapshot();
-    const body = JSON.stringify(data);
+    const body = JSON.stringify([data, googleEvents?.fetchedAt]);
     const h = hash(body);
     if (h !== (await repo.getSetting(SETTING.lastHash))) {
       const out: SyncFile = {
         format: "identity-sync", version: 1, deviceId: id,
         deviceName: (await repo.getSetting(SETTING.deviceName)) || fallbackName, writtenAt: at, data,
+        ...(googleEvents ? { googleEvents } : {}),
       };
       await io.writeOwn(folder, file, JSON.stringify(out));
       await repo.setSetting(SETTING.lastHash, h);

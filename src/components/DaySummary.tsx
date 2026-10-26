@@ -3,6 +3,7 @@ import { MOODS, type Day, type Habit, type HabitEntry, type Tag, type Task } fro
 import { dayStats } from "../domain/stats";
 import { getHabitType } from "../habitTypes";
 import { blankTask, useStore } from "../store";
+import { EventList } from "./EventList";
 import { TaskItem } from "./TaskItem";
 
 interface Props {
@@ -32,6 +33,7 @@ export function DaySummary({ date, habits, tags, tasks, day, entries, tagFilter,
   const editTask = useStore((s) => s.editTask);
   const taskList = (
     <>
+      <EventList date={date} heading={<div className="label">Schedule</div>} />
       <div className="label">Tasks</div>
       <div className="list">
         {tasks.map((t) => <TaskItem key={t.id} task={t} />)}

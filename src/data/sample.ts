@@ -14,7 +14,7 @@ function rng(seed: number) {
 }
 
 /** Example habits and six weeks of history for the browser preview only. The desktop app starts empty. */
-export function sampleData(today = todayKey()): { habits: Habit[]; tags: Tag[]; days: Record<string, Day>; entries: Record<string, HabitEntry>; tasks: Task[] } {
+export function sampleData(today = todayKey()): { habits: Habit[]; tags: Tag[]; days: Record<string, Day>; entries: Record<string, HabitEntry>; tasks: Task[]; settings: Record<string, string> } {
   const tags: Tag[] = [
     { id: "fitness", name: "fitness", color: "#E07A5F" },
     { id: "mind", name: "mind", color: "#9B6BD6" },
@@ -70,5 +70,15 @@ export function sampleData(today = todayKey()): { habits: Habit[]; tags: Tag[]; 
     task("t_library", "Return library books", null, { tags: ["mind"] }),
     task("t_plants", "Water the plants", addDays(today, -2), { doneAt: `${addDays(today, -2)}T18:00:00.000Z` }),
   ];
-  return { habits, tags, days, entries, tasks };
+  // Example Google Calendar events, as the desktop app would cache them.
+  const ev = (id: string, title: string, date: string, startTime: string | null, endTime: string | null, endDate = date) =>
+    ({ id, title, startDate: date, startTime, endDate, endTime });
+  const events = [
+    ev("g1", "Team standup", today, "09:30", "09:45"),
+    ev("g2", "Lunch with Sam", today, "12:30", "13:30"),
+    ev("g3", "Weekend away", addDays(today, 4), null, null, addDays(today, 6)),
+    ev("g4", "Dentist", addDays(today, 2), "15:00", "15:45"),
+  ];
+  const settings = { "google.events": JSON.stringify({ fetchedAt: now, events }) };
+  return { habits, tags, days, entries, tasks, settings };
 }

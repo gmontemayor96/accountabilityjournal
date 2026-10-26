@@ -20,6 +20,7 @@ Milestones 1 and 2 of 4 (see the [product and architecture spec](https://claude.
 - [x] Streaks: current and best, on Today and Habits (per-week habits count weeks)
 - [x] Daily automatic backups (last 30 kept), restore from any of them
 - [x] Export to JSON (re-importable) and CSV (habit log and journal), import JSON
+- [x] Google Calendar: dated tasks go to an "Identity" calendar; your Google events show (read-only) on Today and the calendar
 - [x] Tasks: one-off to-dos with a due date and time, tags, notes and a reminder; shown on Today and the calendar, synced
 
 ## Install
@@ -35,6 +36,12 @@ APKs are signed with the keystore in the `ANDROID_KEYSTORE` (base64 of a `.jks` 
 Open **Tasks**, or type into "Add a task" on Today. A task can have a due date and time, tags, notes and a reminder (at the due time, 15 minutes, an hour or a day before, or any time you pick). Tasks with a date show on that day in Today and on the calendar, and overdue ones stay on Today until done.
 
 Reminders: on Android they are scheduled with the system, so they arrive even when the app is closed (allow notifications when asked). On Windows the app shows them while it is running, including minimized.
+
+## Google Calendar
+
+The Windows app connects to Google Calendar (Data → Google Calendar). Tasks with a date are copied to a calendar called "Identity" in your Google account (all-day, or 30 minutes at the due time) and kept up to date as you edit, finish (shown with ✓) or delete them. Your primary calendar's events, from 30 days back to 120 days ahead, show read-only under Schedule on Today and on the calendar. The phone gets those events through sync; Google sign-in only runs on the desktop. Edits made to the "Identity" events in Google are overwritten by the app.
+
+Google requires your own sign-in key for a self-built app. The Data screen walks through it: create a Google Cloud project, enable the Google Calendar API, set up the consent screen (External, then Publish so tokens don't expire after 7 days), create a **Desktop app** OAuth client, and paste its client ID and secret into the app. They are stored only in the local database, never in this repository. The app asks for two permissions: managing calendars it creates, and reading your events.
 
 ## Backups and export
 
