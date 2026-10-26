@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Icons } from "../components/Icons";
 import { TagPicker } from "../components/TagPicker";
+import { QuickAddTask, TaskItem } from "../components/TaskItem";
 import { addDays, longDate, todayKey } from "../domain/dates";
 import { MOODS, type Habit } from "../domain/model";
 import { describeSchedule, isDue } from "../domain/schedule";
@@ -8,6 +9,7 @@ import type { Streak } from "../domain/streaks";
 import { getHabitType } from "../habitTypes";
 import { useStreaks } from "../hooks/useStreaks";
 import { useStore } from "../store";
+import { tasksForDay } from "../tasks/taskDates";
 
 function HabitRow({ habit, streak, onEdit }: { habit: Habit; streak?: Streak; onEdit: (h: Habit) => void }) {
   const entry = useStore((s) => s.entries[habit.id]);
@@ -68,7 +70,8 @@ function HabitRow({ habit, streak, onEdit }: { habit: Habit; streak?: Streak; on
 }
 
 export function DayScreen({ onEditHabit }: { onEditHabit: (h?: Habit) => void }) {
-  const { date, day, habits, tags, entries, setDate, setJournal, setMood, toggleDayTag, createTag } = useStore();
+  const { date, day, habits, tags, tasks, entries, setDate, setJournal, setMood, toggleDayTag, createTag } = useStore();
+  const dayTasks = tasksForDay(tasks, date);
   const streaks = useStreaks();
   const active = habits.filter((h) => !h.archivedAt);
   const due = active.filter((h) => isDue(h.schedule, date));
@@ -116,6 +119,9 @@ export function DayScreen({ onEditHabit }: { onEditHabit: (h?: Habit) => void })
                 {notDue.map((h) => <HabitRow key={h.id} habit={h} streak={streaks[h.id]} onEdit={onEditHabit} />)}
               </details>
             )}
+            <div className="section-h spaced"><h3>Tasks</h3></div>
+            {dayTasks.map((t) => <TaskItem key={t.id} task={t} />)}
+            <QuickAddTask dueDate={date} placeholder={isToday ? "Add a task for today" : "Add a task for this day"} />
           </div>
           <div>
             <div className="section-h"><h3>Journal</h3></div>

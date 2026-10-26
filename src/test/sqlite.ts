@@ -19,5 +19,6 @@ export function memoryDriver(): SqlDriver {
   const db = new DatabaseSync(":memory:");
   db.exec(migration("001_init.sql"));
   db.exec(migration("002_sync.sql"));
+  db.exec(migration("003_tasks.sql"));
   return driverFor(db);
 }

@@ -1,12 +1,15 @@
 import { longDate, todayKey } from "../domain/dates";
-import { MOODS, type Day, type Habit, type HabitEntry, type Tag } from "../domain/model";
+import { MOODS, type Day, type Habit, type HabitEntry, type Tag, type Task } from "../domain/model";
 import { dayStats } from "../domain/stats";
 import { getHabitType } from "../habitTypes";
+import { blankTask, useStore } from "../store";
+import { TaskItem } from "./TaskItem";
 
 interface Props {
   date: string;
   habits: Habit[];
   tags: Tag[];
+  tasks: Task[];
   day?: Day;
   entries: Record<string, HabitEntry>;
   tagFilter: string | null;
@@ -25,7 +28,17 @@ function Ring({ pct }: { pct: number }) {
 }
 
 /** The selected day's habits, journal and tags, shown beside the calendar. */
-export function DaySummary({ date, habits, tags, day, entries, tagFilter, onOpen }: Props) {
+export function DaySummary({ date, habits, tags, tasks, day, entries, tagFilter, onOpen }: Props) {
+  const editTask = useStore((s) => s.editTask);
+  const taskList = (
+    <>
+      <div className="label">Tasks</div>
+      <div className="list">
+        {tasks.map((t) => <TaskItem key={t.id} task={t} />)}
+        <button className="linkbtn addtask" onClick={() => editTask(blankTask(date))}>+ Add a task on this day</button>
+      </div>
+    </>
+  );
   const isFuture = date > todayKey();
   const st = dayStats(habits, date, entries, tagFilter);
   const tagName = (id: string) => tags.find((t) => t.id === id)?.name ?? id;
@@ -35,7 +48,10 @@ export function DaySummary({ date, habits, tags, day, entries, tagFilter, onOpen
       <div className="label">{date === todayKey() ? "Today" : "Selected day"}</div>
       <h2>{longDate(date)}</h2>
       {isFuture ? (
-        <p className="empty">{st.due.length} habits scheduled. You can log this day once it arrives.</p>
+        <>
+          <p className="empty">{st.due.length} habits scheduled. You can log this day once it arrives.</p>
+          {taskList}
+        </>
       ) : (
         <>
           <div className="meta">
@@ -67,6 +83,7 @@ export function DaySummary({ date, habits, tags, day, entries, tagFilter, onOpen
               );
             })}
           </div>
+          {taskList}
           <div className="label">Journal</div>
           {day?.journal ? <div className="excerpt">{day.journal}</div> : <p className="empty">No entry yet.</p>}
           <button className="btn primary" onClick={() => onOpen(date)}>Open day</button>

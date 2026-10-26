@@ -119,6 +119,38 @@ describe("sync", () => {
     expect((await c.repo.loadDay("2026-10-19")).day.tags).toEqual([]);
   });
 
+  it("syncs tasks, their edits and their deletion", async () => {
+    const a = device(), b = device();
+    a.clock.set("2026-10-20T10:00:00Z");
+    await a.repo.saveTag({ id: "mind", name: "mind", color: "#9B6BD6" });
+    const task = { id: "t1", title: "Call the dentist", notes: "", dueDate: "2026-10-27", dueTime: "09:00", remindAt: "2026-10-27T08:45",
+      doneAt: null, createdAt: "2026-10-20T10:00:00.000Z", tags: ["mind"] };
+    await a.repo.saveTask(task);
+    await a.repo.saveTask({ ...task, id: "t2", title: "Buy stamps", dueDate: null, dueTime: null, remindAt: null, tags: [] });
+    await pull(b.repo, a.repo);
+    expect((await b.repo.loadTasks()).map((t) => t.title)).toEqual(["Call the dentist", "Buy stamps"]);
+    expect((await b.repo.loadTasks())[0]).toEqual(task);
+
+    b.clock.set("2026-10-21T10:00:00Z");
+    await b.repo.saveTask({ ...task, doneAt: "2026-10-21T10:00:00.000Z" });
+    a.clock.set("2026-10-21T11:00:00Z");
+    await a.repo.deleteTask("t2");
+    await a.repo.deleteTag("mind");
+    await pull(a.repo, b.repo);
+    await pull(b.repo, a.repo);
+    for (const r of [a.repo, b.repo]) {
+      const tasks = await r.loadTasks();
+      expect(tasks.map((t) => [t.id, t.doneAt, t.tags])).toEqual([["t1", "2026-10-21T10:00:00.000Z", []]]);
+    }
+  });
+
+  it("reads sync files written before tasks existed", async () => {
+    const a = device();
+    const old = { ...(await a.repo.snapshot()) } as Record<string, unknown>;
+    delete old.tasks;
+    expect(isEmpty(planMerge(await a.repo.snapshot(), [old as never]))).toBe(true);
+  });
+
   it("keeps the local copy on an exact tie", () => {
     const at = "2026-10-20T10:00:00.000Z";
     const local = { habits: [{ data: habit, updatedAt: at }], tags: [], days: [], entries: [], tombstones: [] };
@@ -134,6 +166,7 @@ describe("sync", () => {
     db.exec(`INSERT INTO habit_entry (habit_id, date, value, note, fields, logged_at)
              VALUES ('h1', '2026-01-02', 1, '', '{}', '2026-01-02T09:00:00Z')`);
     db.exec(migration("002_sync.sql"));
+    db.exec(migration("003_tasks.sql"));
     const snap = await new SqliteRepo(driverFor(db)).snapshot();
     expect(snap.habits[0].updatedAt).toBe("2026-01-01T00:00:00Z");
     expect(snap.entries[0].updatedAt).toBe("2026-01-02T09:00:00Z");

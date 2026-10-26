@@ -1,4 +1,4 @@
-import { emptyDay, type Day, type Habit, type HabitEntry, type Tag } from "../domain/model";
+import { emptyDay, type Day, type Habit, type HabitEntry, type Tag, type Task } from "../domain/model";
 import { entryKey, type SyncChanges, type SyncData, type Tombstone } from "../sync/types";
 import type { Repo } from "./repo";
 
@@ -7,6 +7,7 @@ interface Snapshot {
   tags: Tag[];
   days: Record<string, Day>;
   entries: Record<string, HabitEntry>; // key: `${habitId}|${date}`
+  tasks?: Task[];
   updated?: Record<string, string>; // key: `${kind}:${key}` -> last change
   tombstones?: Tombstone[];
   settings?: Record<string, string>;
@@ -90,6 +91,24 @@ export class MemoryRepo implements Repo {
     this.s.tags = this.s.tags.filter((t) => t.id !== id);
     for (const h of this.s.habits) h.tags = h.tags.filter((t) => t !== id);
     for (const d of Object.values(this.s.days)) d.tags = d.tags.filter((t) => t !== id);
+    for (const t of this.s.tasks ?? []) t.tags = t.tags.filter((x) => x !== id);
+  }
+  async loadTasks() {
+    return structuredClone(this.s.tasks ?? []).sort((a, b) =>
+      (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999") || (a.dueTime ?? "").localeCompare(b.dueTime ?? "") || a.createdAt.localeCompare(b.createdAt));
+  }
+  async saveTask(t: Task) {
+    const list = (this.s.tasks ??= []);
+    const i = list.findIndex((x) => x.id === t.id);
+    if (i >= 0) list[i] = structuredClone(t);
+    else list.push(structuredClone(t));
+    this.stamp("task", t.id);
+    this.persist();
+  }
+  async deleteTask(id: string) {
+    this.s.tasks = (this.s.tasks ?? []).filter((t) => t.id !== id);
+    this.bury({ kind: "task", key: id, deletedAt: new Date().toISOString() });
+    this.persist();
   }
   async loadRange(from: string, to: string) {
     const inRange = (d: string) => d >= from && d <= to;
@@ -129,6 +148,7 @@ export class MemoryRepo implements Repo {
       tags: this.s.tags.map((data) => ({ data, updatedAt: this.at("tag", data.id) })),
       days: Object.values(this.s.days).map((data) => ({ data, updatedAt: this.at("day", data.date) })),
       entries: Object.values(this.s.entries).map((data) => ({ data, updatedAt: this.at("entry", entryKey(data)) })),
+      tasks: (this.s.tasks ?? []).map((data) => ({ data, updatedAt: this.at("task", data.id) })),
       tombstones: this.s.tombstones ?? [],
     });
   }
@@ -148,6 +168,14 @@ export class MemoryRepo implements Repo {
       this.s.days[r.data.date] = { ...structuredClone(r.data), tags: r.data.tags.filter((t) => tagIds.has(t)) };
       this.stamp("day", r.data.date, r.updatedAt);
     }
+    for (const r of c.tasks ?? []) {
+      const list = (this.s.tasks ??= []);
+      const task = { ...structuredClone(r.data), tags: r.data.tags.filter((t) => tagIds.has(t)) };
+      const i = list.findIndex((x) => x.id === task.id);
+      if (i >= 0) list[i] = task;
+      else list.push(task);
+      this.stamp("task", task.id, r.updatedAt);
+    }
     const habitIds = new Set(this.s.habits.map((h) => h.id));
     for (const r of c.entries) {
       if (!habitIds.has(r.data.habitId)) continue;
@@ -156,6 +184,7 @@ export class MemoryRepo implements Repo {
     }
     for (const t of c.tombstones) {
       if (t.kind === "tag") this.removeTag(t);
+      else if (t.kind === "task") { this.s.tasks = (this.s.tasks ?? []).filter((x) => x.id !== t.key); this.bury(t); }
       else { delete this.s.entries[t.key]; this.bury(t); }
     }
     this.persist();

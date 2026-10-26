@@ -1,4 +1,4 @@
-import type { Day, Habit, HabitEntry, Tag } from "../domain/model";
+import type { Day, Habit, HabitEntry, Tag, Task } from "../domain/model";
 
 /** A record plus the time it last changed on whichever device changed it. */
 export interface Stamped<T> {
@@ -6,12 +6,12 @@ export interface Stamped<T> {
   updatedAt: string; // ISO timestamp
 }
 
-export type TombstoneKind = "tag" | "entry";
+export type TombstoneKind = "tag" | "entry" | "task";
 
 /** Left behind when a tag or an entry is deleted, so other devices delete it too. */
 export interface Tombstone {
   kind: TombstoneKind;
-  key: string; // tag id, or `${habitId}|${date}` for an entry
+  key: string; // tag or task id, or `${habitId}|${date}` for an entry
   deletedAt: string;
 }
 
@@ -21,6 +21,8 @@ export interface SyncData {
   tags: Stamped<Tag>[];
   days: Stamped<Day>[];
   entries: Stamped<HabitEntry>[];
+  /** Missing in files from versions before tasks. */
+  tasks?: Stamped<Task>[];
   tombstones: Tombstone[];
 }
 
@@ -39,5 +41,5 @@ export interface SyncFile {
 export const entryKey = (e: { habitId: string; date: string }) => `${e.habitId}|${e.date}`;
 
 export function emptySyncData(): SyncData {
-  return { habits: [], tags: [], days: [], entries: [], tombstones: [] };
+  return { habits: [], tags: [], days: [], entries: [], tasks: [], tombstones: [] };
 }

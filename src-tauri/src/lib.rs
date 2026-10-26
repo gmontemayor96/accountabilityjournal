@@ -19,6 +19,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/002_sync.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "tasks",
+            sql: include_str!("../migrations/003_tasks.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -26,6 +32,7 @@ fn migrations() -> Vec<Migration> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations("sqlite:identity.db", migrations())

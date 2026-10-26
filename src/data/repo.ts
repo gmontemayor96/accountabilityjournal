@@ -1,4 +1,4 @@
-import type { Day, Habit, HabitEntry, Tag } from "../domain/model";
+import type { Day, Habit, HabitEntry, Tag, Task } from "../domain/model";
 import type { SyncChanges, SyncData } from "../sync/types";
 
 /** Everything the app reads and writes. Screens never talk to storage directly. */
@@ -9,13 +9,17 @@ export interface Repo {
 
   loadTags(): Promise<Tag[]>;
   saveTag(tag: Tag): Promise<void>;
-  /** Removes the tag from every habit and day as well. */
+  /** Removes the tag from every habit, task and day as well. */
   deleteTag(id: string): Promise<void>;
 
   loadDay(date: string): Promise<{ day: Day; entries: HabitEntry[] }>;
   saveDay(day: Day): Promise<void>;
   saveEntry(entry: HabitEntry): Promise<void>;
   deleteEntry(habitId: string, date: string): Promise<void>;
+
+  loadTasks(): Promise<Task[]>;
+  saveTask(task: Task): Promise<void>;
+  deleteTask(id: string): Promise<void>;
 
   /** Every day row and entry between two dates, inclusive. Days with nothing saved are left out. */
   loadRange(from: string, to: string): Promise<{ days: Day[]; entries: HabitEntry[] }>;

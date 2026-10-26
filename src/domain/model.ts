@@ -43,6 +43,19 @@ export interface Day {
   tags: string[];
 }
 
+/** A one-off to-do. Shown on its due date in Today and the calendar. */
+export interface Task {
+  id: string;
+  title: string;
+  notes: string;
+  dueDate: string | null; // YYYY-MM-DD
+  dueTime: string | null; // HH:MM
+  remindAt: string | null; // local YYYY-MM-DDTHH:MM
+  doneAt: string | null;
+  createdAt: string;
+  tags: string[];
+}
+
 export interface Tag {
   id: string;
   name: string;

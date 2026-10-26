@@ -1,5 +1,5 @@
 import { addDays, todayKey } from "../domain/dates";
-import type { Day, Habit, HabitEntry, Tag } from "../domain/model";
+import type { Day, Habit, HabitEntry, Tag, Task } from "../domain/model";
 import { isDue } from "../domain/schedule";
 
 const now = "2026-10-01T00:00:00.000Z";
@@ -14,7 +14,7 @@ function rng(seed: number) {
 }
 
 /** Example habits and six weeks of history for the browser preview only. The desktop app starts empty. */
-export function sampleData(today = todayKey()): { habits: Habit[]; tags: Tag[]; days: Record<string, Day>; entries: Record<string, HabitEntry> } {
+export function sampleData(today = todayKey()): { habits: Habit[]; tags: Tag[]; days: Record<string, Day>; entries: Record<string, HabitEntry>; tasks: Task[] } {
   const tags: Tag[] = [
     { id: "fitness", name: "fitness", color: "#E07A5F" },
     { id: "mind", name: "mind", color: "#9B6BD6" },
@@ -60,5 +60,15 @@ export function sampleData(today = todayKey()): { habits: Habit[]; tags: Tag[]; 
       tags: tag < 0.15 ? ["travel"] : tag < 0.35 ? ["deep-work"] : [],
     };
   }
-  return { habits, tags, days, entries };
+  const task = (id: string, title: string, dueDate: string | null, over: Partial<Task> = {}): Task =>
+    ({ id, title, notes: "", dueDate, dueTime: null, remindAt: null, doneAt: null, createdAt: now, tags: [], ...over });
+  const tasks = [
+    task("t_dentist", "Book the dentist", today, { dueTime: "10:00", remindAt: `${today}T09:45`, tags: ["health"] }),
+    task("t_shoes", "Replace running shoes", addDays(today, -1), { tags: ["fitness"] }),
+    task("t_trip", "Pack for the weekend", addDays(today, 3), { notes: "Charger, book, rain jacket", tags: ["travel"] }),
+    task("t_tax", "Send tax documents", addDays(today, 9)),
+    task("t_library", "Return library books", null, { tags: ["mind"] }),
+    task("t_plants", "Water the plants", addDays(today, -2), { doneAt: `${addDays(today, -2)}T18:00:00.000Z` }),
+  ];
+  return { habits, tags, days, entries, tasks };
 }
