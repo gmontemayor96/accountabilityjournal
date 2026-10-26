@@ -32,6 +32,32 @@
             </intent-filter>
         </activity>
 
+        <!-- Home-screen widgets. They read and tick off data in the app's own database. -->
+        <receiver android:name=".widget.TodayWidget" android:label="@string/widget_today_label" android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_today_info" />
+        </receiver>
+        <receiver android:name=".widget.GoalsWidget" android:label="@string/widget_goals_label" android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_goals_info" />
+        </receiver>
+        <service
+            android:name=".widget.WidgetListService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+        <!-- Runs a widget tap without showing anything, in its own task so the app doesn't come forward. -->
+        <activity
+            android:name=".widget.WidgetActionActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.NoDisplay" />
+
         <provider
           android:name="androidx.core.content.FileProvider"
           android:authorities="${applicationId}.fileprovider"

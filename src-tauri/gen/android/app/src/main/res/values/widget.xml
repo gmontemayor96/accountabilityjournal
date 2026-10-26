@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Home-screen widgets, in the app's own colours. -->
+    <color name="widget_bg">#FFFFFFFF</color>
+    <color name="widget_fg">#FF17201C</color>
+    <color name="widget_muted">#FF5A6762</color>
+    <color name="widget_line">#FFD5DDD9</color>
+    <color name="widget_accent">#FF2C6A57</color>
+    <color name="widget_accent_fg">#FFFFFFFF</color>
+    <string name="widget_today_title">Today</string>
+    <string name="widget_goals_title">Goals</string>
+    <string name="widget_today_label">Identity: Today</string>
+    <string name="widget_goals_label">Identity: Goals</string>
+    <string name="widget_today_description">Tick off today\'s habits and tasks</string>
+    <string name="widget_goals_description">Your goals and how far along they are</string>
+    <string name="widget_no_data">Open Identity once to set it up.</string>
+</resources>

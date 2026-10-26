@@ -7,6 +7,10 @@ export const defaultDeviceName = isAndroid ? "Android phone" : "Windows PC";
 interface AndroidBridge {
   hasAllFilesAccess(): boolean;
   openAllFilesSettings(): void;
+  /** Redraws the home-screen widgets. */
+  refreshWidgets(): void;
+  /** The screen a widget tap asked to open, once ("day" or "goals"); null otherwise. */
+  takeLaunchView(): string | null;
 }
 export const androidBridge = (): AndroidBridge | undefined =>
   (window as unknown as { IdentityAndroid?: AndroidBridge }).IdentityAndroid;
