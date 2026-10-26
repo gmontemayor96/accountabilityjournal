@@ -1,6 +1,6 @@
 import type { Repo } from "../data/repo";
-import { isEmpty, planMerge } from "./merge";
-import type { SyncChanges, SyncFile } from "./types";
+import { changeCount, isEmpty, planMerge } from "./merge";
+import type { SyncFile } from "./types";
 
 /** File access for the sync folder. The desktop and Android apps implement it in Rust. */
 export interface SyncIO {
@@ -41,7 +41,6 @@ function parse(text: string): SyncFile | null {
   }
 }
 
-const count = (c: SyncChanges) => c.habits.length + c.tags.length + c.days.length + c.entries.length + c.tombstones.length;
 
 // FNV-1a, enough to tell whether our data changed since the last write.
 function hash(text: string): string {
@@ -77,7 +76,7 @@ export async function syncOnce(repo: Repo, io: SyncIO, fallbackName: string): Pr
       await repo.setSetting(SETTING.lastHash, h);
     }
     await repo.setSetting(SETTING.lastAt, at);
-    return { status: "ok", at, devices: [...new Set(peers.map((p) => p.deviceName))], applied: count(changes) };
+    return { status: "ok", at, devices: [...new Set(peers.map((p) => p.deviceName))], applied: changeCount(changes) };
   } catch (e) {
     return { status: "error", at, message: e instanceof Error ? e.message : String(e) };
   }

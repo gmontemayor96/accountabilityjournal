@@ -20,7 +20,7 @@ Milestones 1 and 2 of 4 (see the [product and architecture spec](https://claude.
 - [x] Streaks: current and best, on Today and Habits (per-week habits count weeks)
 - [x] Daily automatic backups (last 30 kept), restore from any of them
 - [x] Export to JSON (re-importable) and CSV (habit log and journal), import JSON
-- [ ] Tasks: one-off to-dos with due dates, tags and reminders, on the calendar
+- [x] Tasks: one-off to-dos with a due date and time, tags, notes and a reminder; shown on Today and the calendar, synced
 
 ## Install
 
@@ -29,6 +29,12 @@ Every push builds Windows installers on GitHub Actions. Open the latest run unde
 On Android: open **Actions → Build Android app**, download **identity-android-apk**, unzip it on your phone and open the `.apk` (allow installing from your browser or file manager when asked).
 
 APKs are signed with the keystore in the `ANDROID_KEYSTORE` (base64 of a `.jks` with key alias `identity`) and `ANDROID_KEYSTORE_PASSWORD` repository secrets, so a new APK installs over the old one. Without those secrets each build gets a one-off key, and updating means uninstalling first (sync brings your data back).
+
+## Tasks
+
+Open **Tasks**, or type into "Add a task" on Today. A task can have a due date and time, tags, notes and a reminder (at the due time, 15 minutes, an hour or a day before, or any time you pick). Tasks with a date show on that day in Today and on the calendar, and overdue ones stay on Today until done.
+
+Reminders: on Android they are scheduled with the system, so they arrive even when the app is closed (allow notifications when asked). On Windows the app shows them while it is running, including minimized.
 
 ## Backups and export
 

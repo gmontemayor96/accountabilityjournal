@@ -12,7 +12,7 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 const WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export function CalendarScreen() {
-  const { repo, habits, tags, openDay, dataVersion } = useStore();
+  const { repo, habits, tags, tasks, openDay, dataVersion } = useStore();
   const today = todayKey();
   const [month, setMonth] = useState(() => {
     const d = new Date();
@@ -34,7 +34,7 @@ export function CalendarScreen() {
 
   const active = habits.filter((h) => !h.archivedAt);
   const focus = active.find((h) => h.id === focusId);
-  const usedTags = tags.filter((t) => active.some((h) => h.tags.includes(t.id)));
+  const usedTags = tags.filter((t) => active.some((h) => h.tags.includes(t.id)) || tasks.some((x) => x.tags.includes(t.id)));
   const shift = (n: number) => {
     const y = month.m + n < 0 ? month.y - 1 : month.m + n > 11 ? month.y + 1 : month.y;
     const m = (month.m + n + 12) % 12;
@@ -110,6 +110,8 @@ export function CalendarScreen() {
                   </>
                 );
               }
+              const due = tasks.filter((t) => t.dueDate === k && (!tagFilter || t.tags.includes(tagFilter)));
+              const open = due.filter((t) => !t.doneAt).length;
               return (
                 <button
                   key={k}
@@ -120,6 +122,11 @@ export function CalendarScreen() {
                 >
                   <span className="d"><b>{Number(k.slice(8))}</b>{day?.journal && !focus ? <span className="jmark" title="Has a journal entry">{Icons.journal}</span> : null}</span>
                   {body}
+                  {due.length > 0 && !focus && (
+                    <span className={`tcount${open ? "" : " alldone"}`} title={due.map((t) => t.title).join("\n")}>
+                      {Icons.tasks}{open || due.length}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -133,13 +140,14 @@ export function CalendarScreen() {
                 <span><span className="dot" style={{ background: "var(--muted)" }} /> Done</span>
                 <span><span className="dot hollow" /> Scheduled, missed</span>
                 <span><span className="jmark">{Icons.journal}</span> Journal entry</span>
+                <span><span className="jmark">{Icons.tasks}</span> Open tasks due</span>
                 <span>Click a selected day again to open it.</span>
               </>
             )}
           </div>
         </section>
         <aside className="side">
-          <DaySummary date={selected} habits={active} tags={tags} day={data.days[selected]} entries={data.entries[selected] ?? {}} tagFilter={tagFilter} onOpen={openDay} />
+          <DaySummary date={selected} habits={active} tags={tags} tasks={tasks.filter((t) => t.dueDate === selected)} day={data.days[selected]} entries={data.entries[selected] ?? {}} tagFilter={tagFilter} onOpen={openDay} />
         </aside>
       </div>
     </>

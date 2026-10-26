@@ -1,4 +1,4 @@
-import { emptyDay, type Day, type Habit, type HabitEntry, type HabitField, type Schedule, type Tag } from "../domain/model";
+import { emptyDay, type Day, type Habit, type HabitEntry, type HabitField, type Schedule, type Tag, type Task } from "../domain/model";
 import { entryKey, type SyncChanges, type SyncData, type Tombstone } from "../sync/types";
 import type { Repo } from "./repo";
 
@@ -14,6 +14,10 @@ interface HabitRow {
   created_at: string; archived_at: string | null;
 }
 interface FieldRow { id: string; habit_id: string; label: string; kind: HabitField["kind"] }
+interface TaskRow {
+  id: string; title: string; notes: string; due_date: string | null; due_time: string | null;
+  remind_at: string | null; done_at: string | null; created_at: string; updated_at: string;
+}
 interface EntryRow { habit_id: string; date: string; value: number | null; note: string; fields: string; logged_at: string }
 
 function parseJson<T>(text: string | null | undefined, fallback: T): T {
@@ -112,6 +116,7 @@ export class SqliteRepo implements Repo {
   private async removeTag(t: Tombstone): Promise<void> {
     await this.db.execute("DELETE FROM habit_tag WHERE tag_id = ?", [t.key]);
     await this.db.execute("DELETE FROM day_tag WHERE tag_id = ?", [t.key]);
+    await this.db.execute("DELETE FROM task_tag WHERE tag_id = ?", [t.key]);
     await this.db.execute("DELETE FROM tag WHERE id = ?", [t.key]);
     await this.writeTombstone(t);
   }
@@ -122,6 +127,51 @@ export class SqliteRepo implements Repo {
        ON CONFLICT(kind, key) DO UPDATE SET deleted_at = excluded.deleted_at`,
       [t.kind, t.key, t.deletedAt],
     );
+  }
+
+  async loadTasks(): Promise<Task[]> {
+    return (await this.taskRows()).map(({ task }) => task);
+  }
+
+  private async taskRows(): Promise<{ task: Task; updatedAt: string }[]> {
+    const rows = await this.db.select<TaskRow>("SELECT * FROM task ORDER BY due_date IS NULL, due_date, due_time, created_at");
+    const tags = await this.db.select<{ task_id: string; tag_id: string }>("SELECT task_id, tag_id FROM task_tag");
+    return rows.map((r) => ({
+      updatedAt: r.updated_at || EARLY,
+      task: {
+        id: r.id, title: r.title, notes: r.notes ?? "", dueDate: r.due_date, dueTime: r.due_time, remindAt: r.remind_at,
+        doneAt: r.done_at, createdAt: r.created_at, tags: tags.filter((t) => t.task_id === r.id).map((t) => t.tag_id),
+      },
+    }));
+  }
+
+  async saveTask(t: Task): Promise<void> {
+    await this.writeTask(t, this.now());
+  }
+
+  private async writeTask(t: Task, updatedAt: string): Promise<void> {
+    await this.db.execute(
+      `INSERT INTO task (id, title, notes, due_date, due_time, remind_at, done_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET title = excluded.title, notes = excluded.notes, due_date = excluded.due_date,
+         due_time = excluded.due_time, remind_at = excluded.remind_at, done_at = excluded.done_at, updated_at = excluded.updated_at`,
+      [t.id, t.title, t.notes, t.dueDate, t.dueTime, t.remindAt, t.doneAt, t.createdAt, updatedAt],
+    );
+    await this.db.execute("DELETE FROM task_tag WHERE task_id = ?", [t.id]);
+    for (const tagId of t.tags) {
+      await this.db.execute("INSERT INTO task_tag (task_id, tag_id) VALUES (?, ?)", [t.id, tagId]);
+    }
+    await this.db.execute("DELETE FROM tombstone WHERE kind = 'task' AND key = ?", [t.id]);
+  }
+
+  async deleteTask(id: string): Promise<void> {
+    await this.removeTask({ kind: "task", key: id, deletedAt: this.now() });
+  }
+
+  private async removeTask(t: Tombstone): Promise<void> {
+    await this.db.execute("DELETE FROM task_tag WHERE task_id = ?", [t.key]);
+    await this.db.execute("DELETE FROM task WHERE id = ?", [t.key]);
+    await this.writeTombstone(t);
   }
 
   async loadDay(date: string): Promise<{ day: Day; entries: HabitEntry[] }> {
@@ -209,6 +259,7 @@ export class SqliteRepo implements Repo {
       tags: (await this.loadTags()).map((data) => ({ data, updatedAt: tagAt.get(data.id) ?? EARLY })),
       days: days.map((data) => ({ data, updatedAt: dayAt.get(data.date) ?? EARLY })),
       entries: entries.map((data) => ({ data, updatedAt: entryAt.get(entryKey(data)) ?? EARLY })),
+      tasks: (await this.taskRows()).map(({ task, updatedAt }) => ({ data: task, updatedAt })),
       tombstones: tombstones.map((t) => ({ kind: t.kind, key: t.key, deletedAt: t.deleted_at })),
     };
   }
@@ -229,9 +280,10 @@ export class SqliteRepo implements Repo {
     const known = (ids: string[]) => ids.filter((id) => tagIds.has(id));
     await each(c.habits, (r) => this.writeHabit({ ...r.data, tags: known(r.data.tags) }, r.updatedAt));
     await each(c.days, (r) => this.writeDay({ ...r.data, tags: known(r.data.tags) }, r.updatedAt));
+    await each(c.tasks ?? [], (r) => this.writeTask({ ...r.data, tags: known(r.data.tags) }, r.updatedAt));
     const habitIds = new Set((await this.db.select<{ id: string }>("SELECT id FROM habit")).map((h) => h.id));
     await each(c.entries.filter((r) => habitIds.has(r.data.habitId)), (r) => this.writeEntry(r.data, r.updatedAt));
-    await each(c.tombstones, (t) => (t.kind === "tag" ? this.removeTag(t) : this.removeEntry(t)));
+    await each(c.tombstones, (t) => (t.kind === "tag" ? this.removeTag(t) : t.kind === "task" ? this.removeTask(t) : this.removeEntry(t)));
   }
 
   async getSetting(key: string): Promise<string | null> {

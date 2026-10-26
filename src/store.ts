@@ -1,15 +1,16 @@
 import { create } from "zustand";
 import { isDesktopApp, openRepo, type Repo } from "./data";
 import { todayKey } from "./domain/dates";
-import { emptyDay, newId, PALETTE, slugTagId, type Day, type Habit, type HabitEntry, type Tag } from "./domain/model";
+import { emptyDay, newId, PALETTE, slugTagId, type Day, type Habit, type HabitEntry, type Tag, type Task } from "./domain/model";
 import { toBackup } from "./data/exportFormats";
 import { writeBackup } from "./data/files";
-import { isEmpty, planMerge } from "./sync/merge";
+import { changeCount, isEmpty, planMerge } from "./sync/merge";
 import { syncOnce, type SyncResult } from "./sync/engine";
 import type { SyncData } from "./sync/types";
+import { dueReminders, remindersScheduledBySystem, scheduleAndroid, sentKey, showNow } from "./tasks/reminders";
 import { defaultDeviceName, tauriSyncIO } from "./sync/io";
 
-export type View = "day" | "habits" | "calendar" | "journal" | "tags" | "sync";
+export type View = "day" | "tasks" | "habits" | "calendar" | "journal" | "tags" | "sync";
 
 interface State {
   repo: Repo | null;
@@ -18,6 +19,7 @@ interface State {
   view: View;
   habits: Habit[];
   tags: Tag[];
+  tasks: Task[];
   date: string;
   day: Day;
   entries: Record<string, HabitEntry>;
@@ -50,6 +52,14 @@ interface State {
   /** Shows a date on the Today screen. */
   openDay(date: string): Promise<void>;
   saveHabit(habit: Habit): Promise<void>;
+  /** The task open in the editor, or null. */
+  editingTask: Task | null;
+  editTask(task: Task | null): void;
+  saveTask(task: Task): Promise<void>;
+  toggleTask(id: string): Promise<void>;
+  deleteTask(id: string): Promise<void>;
+  /** Shows reminders that are due (desktop) or hands them to the system (Android). */
+  checkReminders(): Promise<void>;
   setArchived(id: string, archived: boolean): Promise<void>;
 }
 
@@ -62,7 +72,7 @@ function debounce(key: string, fn: () => void, ms = 400) {
 
 const reportError = (e: unknown) => console.error("Identity: failed to save", e);
 
-const WRITES = new Set(["saveHabit", "setHabitArchived", "saveTag", "deleteTag", "saveDay", "saveEntry", "deleteEntry"]);
+const WRITES = new Set(["saveHabit", "setHabitArchived", "saveTag", "deleteTag", "saveDay", "saveEntry", "deleteEntry", "saveTask", "deleteTask"]);
 
 /** Calls `after` once any write to the repository finishes. */
 function onWrites(repo: Repo, after: () => void): Repo {
@@ -106,8 +116,9 @@ export const useStore = create<State>((set, get) => {
   async function reloadAll() {
     const repo = get().repo;
     if (!repo) return;
-    const [habits, tags] = await Promise.all([repo.loadHabits(), repo.loadTags()]);
-    set({ habits, tags, dataVersion: get().dataVersion + 1 });
+    const [habits, tags, tasks] = await Promise.all([repo.loadHabits(), repo.loadTags(), repo.loadTasks()]);
+    set({ habits, tags, tasks, dataVersion: get().dataVersion + 1 });
+    void get().checkReminders();
     await get().setDate(get().date);
   }
 
@@ -126,6 +137,8 @@ export const useStore = create<State>((set, get) => {
     view: "day",
     habits: [],
     tags: [],
+    tasks: [],
+    editingTask: null,
     date: todayKey(),
     day: emptyDay(todayKey()),
     entries: {},
@@ -141,14 +154,16 @@ export const useStore = create<State>((set, get) => {
           syncTimer = setTimeout(() => void get().syncNow(), 4000);
         };
         const repo = isDesktopApp ? onWrites(await openRepo(), scheduleSync) : await openRepo();
-        const [habits, tags] = await Promise.all([repo.loadHabits(), repo.loadTags()]);
-        set({ repo, habits, tags });
+        const [habits, tags, tasks] = await Promise.all([repo.loadHabits(), repo.loadTags(), repo.loadTasks()]);
+        set({ repo, habits, tags, tasks });
         await get().setDate(get().date);
         set({ status: "ready" });
         if (isDesktopApp) {
           void get().backupIfDue();
           setInterval(() => void get().backupIfDue(), 3_600_000);
           void get().syncNow();
+          void get().checkReminders();
+          if (!remindersScheduledBySystem) setInterval(() => void get().checkReminders(), 30_000);
           // Pick up other devices' changes when the app comes back into view, and every minute while open.
           document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && void get().syncNow());
           window.addEventListener("focus", () => void get().syncNow());
@@ -197,7 +212,7 @@ export const useStore = create<State>((set, get) => {
       await repo.applyChanges(changes);
       await reloadAll();
       void get().syncNow();
-      return changes.habits.length + changes.tags.length + changes.days.length + changes.entries.length + changes.tombstones.length;
+      return changeCount(changes);
     },
 
     setView: (view) => set({ view }),
@@ -248,10 +263,11 @@ export const useStore = create<State>((set, get) => {
 
     async deleteTag(id) {
       await get().repo?.deleteTag(id);
-      const { tags, habits, day } = get();
+      const { tags, habits, day, tasks } = get();
       set({
         tags: tags.filter((t) => t.id !== id),
         habits: habits.map((h) => ({ ...h, tags: h.tags.filter((t) => t !== id) })),
+        tasks: tasks.map((t) => ({ ...t, tags: t.tags.filter((x) => x !== id) })),
         day: { ...day, tags: day.tags.filter((t) => t !== id) },
       });
     },
@@ -266,6 +282,47 @@ export const useStore = create<State>((set, get) => {
       await repo?.saveHabit(habit);
       const exists = habits.some((h) => h.id === habit.id);
       set({ habits: exists ? habits.map((h) => (h.id === habit.id ? habit : h)) : [...habits, habit] });
+    },
+
+    editTask: (editingTask) => set({ editingTask }),
+
+    async saveTask(task) {
+      const { repo, tasks } = get();
+      await repo?.saveTask(task);
+      const exists = tasks.some((t) => t.id === task.id);
+      set({ tasks: exists ? tasks.map((t) => (t.id === task.id ? task : t)) : [...tasks, task] });
+      void get().checkReminders();
+    },
+
+    async toggleTask(id) {
+      const task = get().tasks.find((t) => t.id === id);
+      if (task) await get().saveTask({ ...task, doneAt: task.doneAt ? null : new Date().toISOString() });
+    },
+
+    async deleteTask(id) {
+      await get().repo?.deleteTask(id);
+      set({ tasks: get().tasks.filter((t) => t.id !== id) });
+      void get().checkReminders();
+    },
+
+    async checkReminders() {
+      const { repo, tasks } = get();
+      if (!repo || !isDesktopApp) return;
+      try {
+        if (remindersScheduledBySystem) return await scheduleAndroid(tasks);
+        const sent = new Set<string>(JSON.parse((await repo.getSetting("reminders.sent")) ?? "[]"));
+        const due = dueReminders(tasks, new Date(), sent);
+        if (!due.length) return;
+        for (const t of due) {
+          await showNow(t);
+          sent.add(sentKey(t));
+        }
+        // Keep only keys for reminders that still exist, so the list doesn't grow forever.
+        const live = new Set(tasks.filter((t) => t.remindAt).map(sentKey));
+        await repo.setSetting("reminders.sent", JSON.stringify([...sent].filter((k) => live.has(k))));
+      } catch (e) {
+        console.error("Identity: reminders failed", e);
+      }
     },
 
     async setArchived(id, archived) {
@@ -292,4 +349,8 @@ export function blankHabit(existing: Habit[]): Habit {
     tags: [],
     fields: [],
   };
+}
+
+export function blankTask(dueDate: string | null = null): Task {
+  return { id: newId("t"), title: "", notes: "", dueDate, dueTime: null, remindAt: null, doneAt: null, createdAt: new Date().toISOString(), tags: [] };
 }
