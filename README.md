@@ -6,14 +6,17 @@ All data stays on your PC in one SQLite file (`identity.db` in `%APPDATA%\com.gm
 
 ## Status
 
-Milestone 1 of 4 (see the [product and architecture spec](https://claude.ai/code/artifact/4cf36a72-af15-4037-adef-5221456134f8)):
+Milestones 1 and 2 of 4 (see the [product and architecture spec](https://claude.ai/code/artifact/4cf36a72-af15-4037-adef-5221456134f8)):
 
 - [x] App shell, SQLite schema and migrations
 - [x] Habit editor: name, identity statement, color, type (Yes/No, Count, Duration, Scale 1-5), schedule (every day, specific days, times per week), tags, extra fields
 - [x] Today screen: log every habit type, per-entry notes and extra fields, journal, mood, day tags, day at a glance
 - [x] Archive and restore habits
-- [ ] Calendar, Journal feed, Tags screen (milestone 2)
+- [x] Calendar: month grid with a dot per habit, completion bar, day tags, journal marker, tag filter, per-habit heatmap, day summary
+- [x] Journal: feed of every logged day with search across journal, notes and fields, and a tag filter
+- [x] Tags: rename, recolor, delete, add
 - [ ] Streaks, backups, export/import (milestone 3)
+- [ ] Android app and Syncthing sync between devices
 
 ## Install
 
