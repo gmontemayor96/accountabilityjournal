@@ -41,7 +41,9 @@ Android only installs an update over an existing app when both are signed with t
 keytool -genkeypair -keystore identity.jks -alias identity -keyalg RSA -keysize 2048 -validity 10000 -storepass YOUR_PASSWORD -keypass YOUR_PASSWORD -dname "CN=Identity"
 ```
 
-The alias must be `identity`, and both passwords must be the same, because the build uses one password for both.
+The alias must be `identity`, and both passwords must be the same, because the build uses one password for both. Stick to letters and numbers in the password. In PowerShell, `$` starts a variable, so a password like `Pa$$word` silently becomes something else, and the secret you type into GitHub won't match.
+
+To check a keystore and password before uploading, run `keytool -list -keystore identity.jks -alias identity` and type the password when asked. If it prints an entry for `identity`, they match.
 
 **2. Turn it into text.** GitHub secrets hold text, so encode the file as base64:
 
@@ -57,6 +59,8 @@ The alias must be `identity`, and both passwords must be the same, because the b
 | `ANDROID_KEYSTORE_PASSWORD` | the password from step 1 |
 
 **4. Build and reinstall once.** Re-run the latest **Build Android app** workflow (open it under **Actions**, then **Re-run all jobs**), or push any change. If the "No ANDROID_KEYSTORE secret" warning is gone from the run, signing worked. The app on your phone still has the old one-off key, so uninstall it once and install the new APK. From then on, every new APK installs straight over the last one.
+
+If the build fails at **Set up signing**, its error says which part doesn't match: the password, the alias, or the key password. Fix the secret or make a new keystore, then re-run the workflow.
 
 **Keep `identity.jks` and its password somewhere safe**, such as a password manager, and never commit it: this repository is public. If you lose it, you can make a new one, but the next update will need one more uninstall.
 
