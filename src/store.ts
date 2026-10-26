@@ -10,7 +10,7 @@ import type { SyncData } from "./sync/types";
 import { dueReminders, remindersScheduledBySystem, scheduleAndroid, sentKey, showNow } from "./tasks/reminders";
 import { googleSync, isConnected, loadEventCache, signIn, signOut } from "./google/client";
 import { calendarShown, type CalEvent, type CalInfo, type EventCache } from "./google/events";
-import { isAndroid } from "./sync/io";
+import { androidBridge, isAndroid } from "./sync/io";
 import { defaultDeviceName, tauriSyncIO } from "./sync/io";
 
 export type View = "day" | "tasks" | "goals" | "habits" | "calendar" | "journal" | "tags" | "sync";
@@ -135,6 +135,7 @@ function parseChoices(json: string | null): Record<string, boolean> {
 }
 
 let syncTimer: ReturnType<typeof setTimeout> | undefined;
+let widgetTimer: ReturnType<typeof setTimeout> | undefined;
 let googleTimer: ReturnType<typeof setTimeout> | undefined;
 // Google sign-in uses a browser redirect to a local port, which only the desktop app can catch.
 const googleCapable = isDesktopApp && !isAndroid;
@@ -208,6 +209,10 @@ export const useStore = create<State>((set, get) => {
         const repo = isDesktopApp
           ? onWrites(await openRepo(), (method) => {
               scheduleSync();
+              if (isAndroid) {
+                clearTimeout(widgetTimer);
+                widgetTimer = setTimeout(() => androidBridge()?.refreshWidgets(), 1000);
+              }
               if (method !== "saveTask" && method !== "deleteTask") return;
               clearTimeout(googleTimer);
               googleTimer = setTimeout(() => void get().googleSyncNow(), 5000);
@@ -235,6 +240,21 @@ export const useStore = create<State>((set, get) => {
           // Pick up other devices' changes when the app comes back into view, and every minute while open.
           document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && void get().syncNow());
           window.addEventListener("focus", () => void get().syncNow());
+          if (isAndroid) {
+            // Ticks made on a home-screen widget go straight to the database; show them on return,
+            // and open the screen a widget tap asked for.
+            const fromWidget = async () => {
+              if (document.visibilityState !== "visible") return;
+              if (!timers.size) await reloadAll();
+              const view = androidBridge()?.takeLaunchView();
+              if (view === "day" || view === "goals") {
+                if (view === "day" && get().date !== todayKey()) await get().setDate(todayKey());
+                get().setView(view);
+              }
+            };
+            void fromWidget();
+            document.addEventListener("visibilitychange", () => void fromWidget());
+          }
           setInterval(() => document.visibilityState === "visible" && void get().syncNow(), 60_000);
         }
       } catch (e) {

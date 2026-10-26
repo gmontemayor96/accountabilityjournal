@@ -20,6 +20,7 @@ Milestones 1 and 2 of 4 (see the [product and architecture spec](https://claude.
 - [x] Streaks: current and best, on Today and Habits (per-week habits count weeks)
 - [x] Daily automatic backups (last 30 kept), restore from any of them
 - [x] Export to JSON (re-importable) and CSV (habit log and journal), import JSON
+- [x] Android home-screen widgets: Today (tick habits and tasks) and Goals
 - [x] Goals: areas of life with 1 day to 10 year goals, subgoals, linked tasks and progress
 - [x] Google Calendar: dated tasks go to an "Identity" calendar; your Google events show (read-only) on Today and the calendar
 - [x] Tasks: one-off to-dos with a due date and time, tags, notes and a reminder; shown on Today and the calendar, synced
@@ -64,6 +65,15 @@ The alias must be `identity`, and both passwords must be the same, because the b
 Open **Goals** and add an area of your life, such as Health, Career or Money. Each area has six buckets of goals: 1 day, 1 week, 1 month, 1 year, 5 years and 10 years. A goal can be a step toward a longer goal in the same area (a 1 month "Run 10k" toward a 1 year "Run a half marathon"), and any task can count toward a goal through its **Goal** field.
 
 A goal's subgoals and linked tasks are its steps. Each card shows how many steps are done, such as 2/4, and the percentage, which counts a half-done subgoal as half a step. A goal with steps completes itself when they are all done; one without steps you tick off yourself. Goals sync between devices like everything else.
+
+## Android widgets
+
+Long-press your home screen, choose **Widgets**, find **Identity**, and drag out either widget:
+
+- **Identity: Today** shows today's habits and the tasks due today or overdue. Tap a tick box to mark a yes/no habit or a task done (or undo it). Habits you log as an amount or a rating, and the title, open the app on Today.
+- **Identity: Goals** shows each area's goals with their steps done and a progress bar. Tap a goal to open Goals in the app.
+
+Both resize. They read the app's database on the phone, so ticks show in the app straight away and go to your other devices on the app's next sync. They refresh when you leave the app, after each tick, and every 30 minutes.
 
 ## Tasks
 
