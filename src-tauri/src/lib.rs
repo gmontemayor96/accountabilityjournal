@@ -1,4 +1,5 @@
 mod data_files;
+mod google_oauth;
 mod sync_files;
 
 use tauri_plugin_sql::{Migration, MigrationKind};
@@ -33,6 +34,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_http::init())
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations("sqlite:identity.db", migrations())
@@ -47,6 +49,7 @@ pub fn run() {
             data_files::export_write,
             data_files::import_read,
             data_files::import_candidates,
+            google_oauth::google_oauth,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Identity");

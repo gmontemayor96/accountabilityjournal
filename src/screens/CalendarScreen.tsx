@@ -5,6 +5,7 @@ import { todayKey } from "../domain/dates";
 import type { Day, HabitEntry } from "../domain/model";
 import { dayStats, entriesByDate, inMonth, monthGrid } from "../domain/stats";
 import { isDue } from "../domain/schedule";
+import { eventsOn } from "../google/events";
 import { getHabitType } from "../habitTypes";
 import { useStore } from "../store";
 
@@ -12,7 +13,7 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 const WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export function CalendarScreen() {
-  const { repo, habits, tags, tasks, openDay, dataVersion } = useStore();
+  const { repo, habits, tags, tasks, events, openDay, dataVersion } = useStore();
   const today = todayKey();
   const [month, setMonth] = useState(() => {
     const d = new Date();
@@ -112,6 +113,7 @@ export function CalendarScreen() {
               }
               const due = tasks.filter((t) => t.dueDate === k && (!tagFilter || t.tags.includes(tagFilter)));
               const open = due.filter((t) => !t.doneAt).length;
+              const dayEvents = focus ? [] : eventsOn(events, k);
               return (
                 <button
                   key={k}
@@ -122,6 +124,11 @@ export function CalendarScreen() {
                 >
                   <span className="d"><b>{Number(k.slice(8))}</b>{day?.journal && !focus ? <span className="jmark" title="Has a journal entry">{Icons.journal}</span> : null}</span>
                   {body}
+                  {dayEvents.length > 0 && (
+                    <span className="evline" title={dayEvents.map((e) => e.title).join("\n")}>
+                      {dayEvents[0].title}{dayEvents.length > 1 ? ` +${dayEvents.length - 1}` : ""}
+                    </span>
+                  )}
                   {due.length > 0 && !focus && (
                     <span className={`tcount${open ? "" : " alldone"}`} title={due.map((t) => t.title).join("\n")}>
                       {Icons.tasks}{open || due.length}
@@ -141,6 +148,7 @@ export function CalendarScreen() {
                 <span><span className="dot hollow" /> Scheduled, missed</span>
                 <span><span className="jmark">{Icons.journal}</span> Journal entry</span>
                 <span><span className="jmark">{Icons.tasks}</span> Open tasks due</span>
+                {events.length > 0 && <span><span className="evkey" /> Google Calendar events</span>}
                 <span>Click a selected day again to open it.</span>
               </>
             )}

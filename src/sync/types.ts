@@ -1,4 +1,5 @@
 import type { Day, Habit, HabitEntry, Tag, Task } from "../domain/model";
+import type { EventCache } from "../google/events";
 
 /** A record plus the time it last changed on whichever device changed it. */
 export interface Stamped<T> {
@@ -36,6 +37,8 @@ export interface SyncFile {
   deviceName: string;
   writtenAt: string;
   data: SyncData;
+  /** Google Calendar events fetched by the desktop app, passed on so the phone can show them. */
+  googleEvents?: EventCache;
 }
 
 export const entryKey = (e: { habitId: string; date: string }) => `${e.habitId}|${e.date}`;

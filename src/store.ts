@@ -8,6 +8,9 @@ import { changeCount, isEmpty, planMerge } from "./sync/merge";
 import { syncOnce, type SyncResult } from "./sync/engine";
 import type { SyncData } from "./sync/types";
 import { dueReminders, remindersScheduledBySystem, scheduleAndroid, sentKey, showNow } from "./tasks/reminders";
+import { googleSync, isConnected, loadEventCache, signIn, signOut } from "./google/client";
+import type { CalEvent } from "./google/events";
+import { isAndroid } from "./sync/io";
 import { defaultDeviceName, tauriSyncIO } from "./sync/io";
 
 export type View = "day" | "tasks" | "habits" | "calendar" | "journal" | "tags" | "sync";
@@ -27,6 +30,13 @@ interface State {
   dataVersion: number;
   syncing: boolean;
   lastSync: SyncResult | null;
+  /** Google Calendar events (read-only), fetched by the desktop app and shared through sync. */
+  events: CalEvent[];
+  google: { connected: boolean; syncing: boolean; lastAt: string | null; error: string | null };
+  connectGoogle(clientId: string, clientSecret: string): Promise<void>;
+  disconnectGoogle(): Promise<void>;
+  /** Sends changed tasks to Google Calendar and refreshes events. Desktop only. */
+  googleSyncNow(): Promise<void>;
 
   init(): Promise<void>;
   /** Merges with the other devices' files in the sync folder, then writes ours. */
@@ -74,8 +84,8 @@ const reportError = (e: unknown) => console.error("Identity: failed to save", e)
 
 const WRITES = new Set(["saveHabit", "setHabitArchived", "saveTag", "deleteTag", "saveDay", "saveEntry", "deleteEntry", "saveTask", "deleteTask"]);
 
-/** Calls `after` once any write to the repository finishes. */
-function onWrites(repo: Repo, after: () => void): Repo {
+/** Calls `after` with the method name once any write to the repository finishes. */
+function onWrites(repo: Repo, after: (method: string) => void): Repo {
   return new Proxy(repo, {
     get(target, prop, receiver) {
       const value = Reflect.get(target, prop, receiver);
@@ -83,7 +93,7 @@ function onWrites(repo: Repo, after: () => void): Repo {
       if (!WRITES.has(String(prop))) return value.bind(target);
       return async (...args: unknown[]) => {
         const result = await value.apply(target, args);
-        after();
+        after(String(prop));
         return result;
       };
     },
@@ -91,6 +101,9 @@ function onWrites(repo: Repo, after: () => void): Repo {
 }
 
 let syncTimer: ReturnType<typeof setTimeout> | undefined;
+let googleTimer: ReturnType<typeof setTimeout> | undefined;
+// Google sign-in uses a browser redirect to a local port, which only the desktop app can catch.
+const googleCapable = isDesktopApp && !isAndroid;
 
 export const useStore = create<State>((set, get) => {
   /** Writes the habit's entry for the current date, or removes it when nothing is left in it. */
@@ -145,6 +158,8 @@ export const useStore = create<State>((set, get) => {
     dataVersion: 0,
     syncing: false,
     lastSync: null,
+    events: [],
+    google: { connected: false, syncing: false, lastAt: null, error: null },
 
     async init() {
       try {
@@ -153,16 +168,27 @@ export const useStore = create<State>((set, get) => {
           clearTimeout(syncTimer);
           syncTimer = setTimeout(() => void get().syncNow(), 4000);
         };
-        const repo = isDesktopApp ? onWrites(await openRepo(), scheduleSync) : await openRepo();
+        const repo = isDesktopApp
+          ? onWrites(await openRepo(), (method) => {
+              scheduleSync();
+              if (method !== "saveTask" && method !== "deleteTask") return;
+              clearTimeout(googleTimer);
+              googleTimer = setTimeout(() => void get().googleSyncNow(), 5000);
+            })
+          : await openRepo();
         const [habits, tags, tasks] = await Promise.all([repo.loadHabits(), repo.loadTags(), repo.loadTasks()]);
         set({ repo, habits, tags, tasks });
         await get().setDate(get().date);
-        set({ status: "ready" });
+        set({ status: "ready", events: (await loadEventCache(repo))?.events ?? [], google: { ...get().google, connected: await isConnected(repo) } });
         if (isDesktopApp) {
           void get().backupIfDue();
           setInterval(() => void get().backupIfDue(), 3_600_000);
           void get().syncNow();
           void get().checkReminders();
+          if (googleCapable) {
+            void get().googleSyncNow();
+            setInterval(() => void get().googleSyncNow(), 10 * 60_000);
+          }
           if (!remindersScheduledBySystem) setInterval(() => void get().checkReminders(), 30_000);
           // Pick up other devices' changes when the app comes back into view, and every minute while open.
           document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && void get().syncNow());
@@ -186,7 +212,39 @@ export const useStore = create<State>((set, get) => {
       set({ syncing: true });
       const result = await syncOnce(repo, tauriSyncIO, defaultDeviceName);
       set({ syncing: false, lastSync: result });
-      if (result.status === "ok" && result.applied > 0 && !timers.size) await reloadAll();
+      if (result.status === "ok" && result.applied > 0 && !timers.size) {
+        await reloadAll();
+        void get().googleSyncNow();
+      }
+      set({ events: (await loadEventCache(repo))?.events ?? get().events });
+    },
+
+    async connectGoogle(clientId, clientSecret) {
+      const repo = get().repo;
+      if (!repo) return;
+      await signIn(repo, clientId.trim(), clientSecret.trim());
+      set({ google: { ...get().google, connected: true, error: null } });
+      await get().googleSyncNow();
+    },
+
+    async disconnectGoogle() {
+      const repo = get().repo;
+      if (!repo) return;
+      await signOut(repo);
+      set({ google: { connected: false, syncing: false, lastAt: null, error: null } });
+    },
+
+    async googleSyncNow() {
+      const { repo, google, tasks } = get();
+      if (!repo || !googleCapable || !google.connected || google.syncing) return;
+      set({ google: { ...google, syncing: true } });
+      try {
+        const { events } = await googleSync(repo, tasks);
+        set({ events: events.events, google: { ...get().google, syncing: false, lastAt: new Date().toISOString(), error: null } });
+        void get().syncNow(); // pass fresh events on to the phone
+      } catch (e) {
+        set({ google: { ...get().google, syncing: false, error: e instanceof Error ? e.message : String(e) } });
+      }
     },
 
     async backupIfDue() {
