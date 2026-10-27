@@ -1,13 +1,14 @@
 import { create } from "zustand";
 import { isDesktopApp, openRepo, type Repo } from "./data";
-import { todayKey } from "./domain/dates";
+import { addDays, todayKey } from "./domain/dates";
 import { emptyDay, newId, PALETTE, slugTagId, type Area, type Day, type Goal, type Habit, type HabitEntry, type Horizon, type Tag, type Task } from "./domain/model";
 import { toBackup } from "./data/exportFormats";
 import { writeBackup } from "./data/files";
 import { changeCount, isEmpty, planMerge } from "./sync/merge";
 import { syncOnce, type SyncResult } from "./sync/engine";
 import type { SyncData } from "./sync/types";
-import { dueReminders, remindersScheduledBySystem, scheduleAndroid, sentKey, showNow } from "./tasks/reminders";
+import { dueReminders, remindersScheduledBySystem, ensurePermission, scheduleAndroid, sentKey, show, showHabitNow, showNow, type RemindKey } from "./tasks/reminders";
+import { dueHabitReminders, entriesFrom, HABIT_REMINDER_DAYS, habitSentKey, upcomingHabitReminders } from "./tasks/habitReminders";
 import { googleSync, isConnected, loadEventCache, signIn, signOut } from "./google/client";
 import { calendarShown, type CalEvent, type CalInfo, type EventCache } from "./google/events";
 import { androidBridge, isAndroid } from "./sync/io";
@@ -76,6 +77,11 @@ interface State {
   deleteTask(id: string): Promise<void>;
   /** Shows reminders that are due (desktop) or hands them to the system (Android). */
   checkReminders(): Promise<void>;
+  /** Notification choices for this device: all on or off, and the reminder new tasks start with. */
+  notify: { enabled: boolean; taskDefault: RemindKey };
+  setNotify(change: Partial<State["notify"]>): Promise<void>;
+  /** Asks for permission if needed, then shows a notification right away. False when permission is refused. */
+  testNotification(): Promise<boolean>;
 
   areas: Area[];
   goals: Goal[];
@@ -120,6 +126,16 @@ function onWrites(repo: Repo, after: (method: string) => void): Repo {
 }
 
 const CHOICES_KEY = "calendar.shown";
+const NOTIFY_KEY = "notify.settings";
+
+function parseNotify(json: string | null): State["notify"] {
+  try {
+    const raw = JSON.parse(json ?? "{}");
+    return { enabled: raw.enabled !== false, taskDefault: typeof raw.taskDefault === "string" ? raw.taskDefault : "" };
+  } catch {
+    return { enabled: true, taskDefault: "" };
+  }
+}
 
 function cacheState(cache: EventCache | null): Pick<State, "events" | "calendars" | "primaryOnly"> {
   return { events: cache?.events ?? [], calendars: cache?.calendars ?? [], primaryOnly: !!cache?.primaryOnly };
@@ -136,6 +152,7 @@ function parseChoices(json: string | null): Record<string, boolean> {
 
 let syncTimer: ReturnType<typeof setTimeout> | undefined;
 let widgetTimer: ReturnType<typeof setTimeout> | undefined;
+let reminderTimer: ReturnType<typeof setTimeout> | undefined;
 let googleTimer: ReturnType<typeof setTimeout> | undefined;
 // Google sign-in uses a browser redirect to a local port, which only the desktop app can catch.
 const googleCapable = isDesktopApp && !isAndroid;
@@ -197,6 +214,7 @@ export const useStore = create<State>((set, get) => {
     calendars: [],
     primaryOnly: false,
     calendarChoices: {},
+    notify: { enabled: true, taskDefault: "" },
     google: { connected: false, syncing: false, lastAt: null, error: null },
 
     async init() {
@@ -212,6 +230,11 @@ export const useStore = create<State>((set, get) => {
               if (isAndroid) {
                 clearTimeout(widgetTimer);
                 widgetTimer = setTimeout(() => androidBridge()?.refreshWidgets(), 1000);
+                // Logging or changing a habit changes which of its reminders are still wanted.
+                if (["saveEntry", "deleteEntry", "saveHabit", "setHabitArchived"].includes(method)) {
+                  clearTimeout(reminderTimer);
+                  reminderTimer = setTimeout(() => void get().checkReminders(), 1000);
+                }
               }
               if (method !== "saveTask" && method !== "deleteTask") return;
               clearTimeout(googleTimer);
@@ -225,6 +248,7 @@ export const useStore = create<State>((set, get) => {
           status: "ready",
           ...cacheState(await loadEventCache(repo)),
           calendarChoices: parseChoices(await repo.getSetting(CHOICES_KEY)),
+          notify: parseNotify(await repo.getSetting(NOTIFY_KEY)),
           google: { ...get().google, connected: await isConnected(repo) },
         });
         if (isDesktopApp) {
@@ -412,6 +436,7 @@ export const useStore = create<State>((set, get) => {
       await repo?.saveHabit(habit);
       const exists = habits.some((h) => h.id === habit.id);
       set({ habits: exists ? habits.map((h) => (h.id === habit.id ? habit : h)) : [...habits, habit] });
+      void get().checkReminders();
     },
 
     editTask: (editingTask) => set({ editingTask }),
@@ -478,23 +503,49 @@ export const useStore = create<State>((set, get) => {
     },
 
     async checkReminders() {
-      const { repo, tasks } = get();
+      const { repo, tasks, habits, notify } = get();
       if (!repo || !isDesktopApp) return;
       try {
-        if (remindersScheduledBySystem) return await scheduleAndroid(tasks);
+        const now = new Date();
+        const today = todayKey(now);
+        const withTimes = notify.enabled ? habits.filter((h) => h.reminders?.length) : [];
+        const entries = withTimes.length ? (await repo.loadRange(entriesFrom(now), addDays(today, HABIT_REMINDER_DAYS))).entries : [];
+        if (remindersScheduledBySystem) {
+          return await scheduleAndroid(notify.enabled ? tasks : [], upcomingHabitReminders(withTimes, entries, now));
+        }
+        if (!notify.enabled) return;
         const sent = new Set<string>(JSON.parse((await repo.getSetting("reminders.sent")) ?? "[]"));
-        const due = dueReminders(tasks, new Date(), sent);
-        if (!due.length) return;
+        const due = dueReminders(tasks, now, sent);
+        const dueHabits = dueHabitReminders(withTimes, entries, now, sent);
+        if (!due.length && !dueHabits.length) return;
         for (const t of due) {
           await showNow(t);
           sent.add(sentKey(t));
         }
-        // Keep only keys for reminders that still exist, so the list doesn't grow forever.
+        for (const r of dueHabits) {
+          await showHabitNow(r);
+          sent.add(habitSentKey(r));
+        }
+        // Keep only keys for reminders that still exist (habit ones for today), so the list doesn't grow forever.
         const live = new Set(tasks.filter((t) => t.remindAt).map(sentKey));
-        await repo.setSetting("reminders.sent", JSON.stringify([...sent].filter((k) => live.has(k))));
+        await repo.setSetting("reminders.sent", JSON.stringify([...sent].filter((k) => live.has(k) || k.includes(`@${today}T`))));
       } catch (e) {
         console.error("Identity: reminders failed", e);
       }
+    },
+
+    async setNotify(change) {
+      const notify = { ...get().notify, ...change };
+      set({ notify });
+      await get().repo?.setSetting(NOTIFY_KEY, JSON.stringify(notify));
+      await get().checkReminders();
+    },
+
+    async testNotification() {
+      if (!(await ensurePermission().catch(() => false))) return false;
+      await show("Identity", "Notifications are working.");
+      void get().checkReminders();
+      return true;
     },
 
     async setArchived(id, archived) {
@@ -520,6 +571,7 @@ export function blankHabit(existing: Habit[]): Habit {
     archivedAt: null,
     tags: [],
     fields: [],
+    reminders: [],
   };
 }
 

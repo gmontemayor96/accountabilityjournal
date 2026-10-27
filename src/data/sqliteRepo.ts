@@ -11,7 +11,7 @@ export interface SqlDriver {
 interface HabitRow {
   id: string; name: string; identity: string; color: string; type: Habit["type"];
   target: number | null; unit: string; schedule: string; sort_order: number;
-  created_at: string; archived_at: string | null;
+  created_at: string; archived_at: string | null; reminders: string | null;
 }
 interface FieldRow { id: string; habit_id: string; label: string; kind: HabitField["kind"] }
 interface TaskRow {
@@ -67,6 +67,7 @@ export class SqliteRepo implements Repo {
       archivedAt: r.archived_at,
       tags: tags.filter((t) => t.habit_id === r.id).map((t) => t.tag_id),
       fields: fields.filter((f) => f.habit_id === r.id).map(({ id, label, kind }) => ({ id, label, kind })),
+      reminders: parseJson<string[]>(r.reminders, []),
     }));
   }
 
@@ -76,12 +77,13 @@ export class SqliteRepo implements Repo {
 
   private async writeHabit(h: Habit, updatedAt: string): Promise<void> {
     await this.db.execute(
-      `INSERT INTO habit (id, name, identity, color, type, target, unit, schedule, sort_order, created_at, archived_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO habit (id, name, identity, color, type, target, unit, schedule, sort_order, created_at, archived_at, updated_at, reminders)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET name = excluded.name, identity = excluded.identity, color = excluded.color,
          type = excluded.type, target = excluded.target, unit = excluded.unit, schedule = excluded.schedule,
-         sort_order = excluded.sort_order, archived_at = excluded.archived_at, updated_at = excluded.updated_at`,
-      [h.id, h.name, h.identity, h.color, h.type, h.target, h.unit, JSON.stringify(h.schedule), h.sortOrder, h.createdAt, h.archivedAt, updatedAt],
+         sort_order = excluded.sort_order, archived_at = excluded.archived_at, updated_at = excluded.updated_at, reminders = excluded.reminders`,
+      [h.id, h.name, h.identity, h.color, h.type, h.target, h.unit, JSON.stringify(h.schedule), h.sortOrder, h.createdAt, h.archivedAt, updatedAt,
+        JSON.stringify(h.reminders ?? [])],
     );
     await this.db.execute("DELETE FROM habit_field WHERE habit_id = ?", [h.id]);
     for (const [i, f] of h.fields.entries()) {

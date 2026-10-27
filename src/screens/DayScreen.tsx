@@ -12,7 +12,7 @@ import { useStreaks } from "../hooks/useStreaks";
 import { useStore } from "../store";
 import { tasksForDay } from "../tasks/taskDates";
 
-function HabitRow({ habit, streak, onEdit }: { habit: Habit; streak?: Streak; onEdit: (h: Habit) => void }) {
+function HabitRow({ habit, streak }: { habit: Habit; streak?: Streak }) {
   const entry = useStore((s) => s.entries[habit.id]);
   const { logValue, setEntryNote, setEntryField } = useStore();
   const [open, setOpen] = useState(false);
@@ -38,7 +38,7 @@ function HabitRow({ habit, streak, onEdit }: { habit: Habit; streak?: Streak; on
         <div className="ctl">
           <type.Input habit={habit} value={entry?.value ?? null} onChange={(v) => logValue(habit.id, v)} />
           <button type="button" className="iconbtn" aria-expanded={open} aria-label={`Notes and details for ${habit.name}`} onClick={() => setOpen(!open)}>
-            {Icons.edit}
+            {Icons.note}
           </button>
         </div>
       </div>
@@ -58,12 +58,9 @@ function HabitRow({ habit, streak, onEdit }: { habit: Habit; streak?: Streak; on
               />
             </label>
           ))}
-          <div className="hint">
-            {entry?.value != null ? `Logged at ${new Date(entry.loggedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ` : ""}
-            <button type="button" className="linkbtn" onClick={() => onEdit(habit)}>
-              Edit {habit.name}
-            </button>
-          </div>
+          {entry?.value != null && (
+            <div className="hint">Logged at {new Date(entry.loggedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+          )}
         </div>
       )}
     </div>
@@ -113,11 +110,11 @@ export function DayScreen({ onEditHabit }: { onEditHabit: (h?: Habit) => void })
                 <button className="btn primary" onClick={() => onEditHabit()}>Add your first habit</button>
               </div>
             )}
-            {due.map((h) => <HabitRow key={h.id} habit={h} streak={streaks[h.id]} onEdit={onEditHabit} />)}
+            {due.map((h) => <HabitRow key={h.id} habit={h} streak={streaks[h.id]} />)}
             {notDue.length > 0 && (
               <details className="unsched">
                 <summary>{notDue.length} not scheduled today</summary>
-                {notDue.map((h) => <HabitRow key={h.id} habit={h} streak={streaks[h.id]} onEdit={onEditHabit} />)}
+                {notDue.map((h) => <HabitRow key={h.id} habit={h} streak={streaks[h.id]} />)}
               </details>
             )}
             <EventList date={date} heading={<div className="section-h spaced"><h3>Schedule</h3></div>} />

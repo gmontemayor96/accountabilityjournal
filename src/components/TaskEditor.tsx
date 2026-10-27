@@ -8,11 +8,11 @@ import { Icons } from "./Icons";
 import { TagPicker } from "./TagPicker";
 
 export function TaskEditor({ task, onClose }: { task: Task; onClose: () => void }) {
-  const { tasks, tags, areas, goals, saveTask, deleteTask, createTag } = useStore();
+  const { tasks, tags, areas, goals, saveTask, deleteTask, createTag, notify } = useStore();
   const rank = (h: string) => HORIZONS.findIndex((x) => x.key === h);
   const isNew = !tasks.some((t) => t.id === task.id);
   const [d, setD] = useState<Task>(() => structuredClone(task));
-  const [remind, setRemind] = useState<RemindKey>(() => reminderKey(task));
+  const [remind, setRemind] = useState<RemindKey>(() => (isNew && !task.remindAt ? notify.taskDefault : reminderKey(task)));
   const [titleError, setTitleError] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);

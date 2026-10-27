@@ -6,7 +6,7 @@ import { SqliteRepo } from "./sqliteRepo";
 const run: Habit = {
   id: "h_run", name: "Morning run", identity: "I am a runner.", color: "#E07A5F", type: "duration", target: 30, unit: "min",
   schedule: { kind: "weekdays", days: [1, 2, 4, 6] }, sortOrder: 0, createdAt: "2026-10-01T00:00:00Z", archivedAt: null,
-  tags: ["fitness"], fields: [{ id: "f_dist", label: "Distance (km)", kind: "number" }],
+  tags: ["fitness"], fields: [{ id: "f_dist", label: "Distance (km)", kind: "number" }], reminders: ["07:00"],
 };
 
 describe("SqliteRepo", () => {
@@ -24,7 +24,7 @@ describe("SqliteRepo", () => {
 
   it("replaces tags and fields when a habit is edited", async () => {
     await repo.saveHabit(run);
-    const edited = { ...run, name: "Run", tags: ["mind"], fields: [{ id: "f_route", label: "Route", kind: "text" as const }] };
+    const edited = { ...run, name: "Run", tags: ["mind"], fields: [{ id: "f_route", label: "Route", kind: "text" as const }], reminders: ["06:30", "18:00"] };
     await repo.saveHabit(edited);
     expect(await repo.loadHabits()).toEqual([edited]);
   });

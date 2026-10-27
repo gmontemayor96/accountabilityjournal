@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { DataSection } from "../components/DataSection";
 import { GoogleSection } from "../components/GoogleSection";
+import { NotifySection } from "../components/NotifySection";
 import { isDesktopApp } from "../data";
 import { SETTING } from "../sync/engine";
 import { androidBridge, defaultDeviceName, isAndroid, pickFolder } from "../sync/io";
@@ -53,7 +54,7 @@ export function SyncScreen() {
       <header className="viewhead">
         <div>
           <h1>Data</h1>
-          <div className="sub">Sync between your devices, Google Calendar, daily backups, and export to JSON or CSV.</div>
+          <div className="sub">Sync between your devices, notifications, Google Calendar, daily backups, and export to JSON or CSV.</div>
         </div>
       </header>
       <section className="canvas syncpage">
@@ -113,6 +114,7 @@ export function SyncScreen() {
               Sync runs when the app opens, when you come back to it, every minute while it is open, and a few seconds after you change
               something. If both devices change the same thing, the later change wins.
             </p>
+            <NotifySection />
             <GoogleSection />
             <DataSection />
           </>

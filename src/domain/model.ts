@@ -25,6 +25,8 @@ export interface Habit {
   archivedAt: string | null;
   tags: string[];
   fields: HabitField[];
+  /** Times of day ("HH:MM") to be reminded on days the habit is due and not yet done. Missing on older habits. */
+  reminders?: string[];
 }
 
 export interface HabitEntry {

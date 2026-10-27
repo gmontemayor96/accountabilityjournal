@@ -4,6 +4,9 @@ import { newId, PALETTE, type Habit, type Schedule } from "../domain/model";
 import { normalizeSchedule } from "../domain/schedule";
 import { allHabitTypes, getHabitType } from "../habitTypes";
 import { useStore } from "../store";
+import { isDesktopApp } from "../data";
+import { cleanTimes } from "../tasks/habitReminders";
+import { ensurePermission } from "../tasks/reminders";
 import { Icons } from "./Icons";
 import { TagPicker } from "./TagPicker";
 
@@ -14,7 +17,7 @@ const SCHEDULES: { kind: Schedule["kind"]; label: string }[] = [
 ];
 
 export function HabitEditor({ habit, onClose }: { habit: Habit; onClose: () => void }) {
-  const { habits, tags, saveHabit, setArchived, createTag } = useStore();
+  const { habits, tags, saveHabit, setArchived, createTag, notify } = useStore();
   const isNew = !habits.some((h) => h.id === habit.id);
   const [d, setD] = useState<Habit>(() => structuredClone(habit));
   const [nameError, setNameError] = useState(false);
@@ -43,6 +46,8 @@ export function HabitEditor({ habit, onClose }: { habit: Habit; onClose: () => v
       return;
     }
     const t = getHabitType(d.type);
+    const reminders = cleanTimes(d.reminders);
+    if (reminders.length && isDesktopApp) await ensurePermission().catch(() => false);
     await saveHabit({
       ...d,
       name: d.name.trim(),
@@ -51,6 +56,7 @@ export function HabitEditor({ habit, onClose }: { habit: Habit; onClose: () => v
       unit: t.usesTarget ? d.unit.trim() : "",
       schedule: normalizeSchedule(d.schedule),
       fields: d.fields.filter((f) => f.label.trim()).map((f) => ({ ...f, label: f.label.trim() })),
+      reminders,
     });
     onClose();
   }
@@ -142,6 +148,25 @@ export function HabitEditor({ habit, onClose }: { habit: Habit; onClose: () => v
                 <span className="hint">times per week, any days</span>
               </div>
             )}
+          </div>
+          <div className="field">
+            <span className="label">Reminders</span>
+            {(d.reminders ?? []).map((time, i) => (
+              <div key={i} className="inline">
+                <input type="time" aria-label={`Reminder ${i + 1}`} value={time}
+                  onChange={(e) => update({ reminders: (d.reminders ?? []).map((x, j) => (j === i ? e.target.value : x)) })} />
+                <button type="button" className="iconbtn" aria-label="Remove reminder"
+                  onClick={() => update({ reminders: (d.reminders ?? []).filter((_, j) => j !== i) })}>{Icons.close}</button>
+              </div>
+            ))}
+            <div>
+              <button type="button" className="btn" onClick={() => update({ reminders: [...(d.reminders ?? []), "09:00"] })}>+ Add reminder</button>
+            </div>
+            <span className="hint">
+              A notification at each time on days this habit is due, unless you've already logged it.
+              {d.schedule.kind === "perWeek" && " Stops for the week once you've reached your count."}
+              {!notify.enabled && " Notifications are off on this device; turn them on in Data."}
+            </span>
           </div>
           <div className="field">
             <span className="label">Tags</span>

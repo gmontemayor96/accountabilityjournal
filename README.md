@@ -24,6 +24,7 @@ Milestones 1 and 2 of 4 (see the [product and architecture spec](https://claude.
 - [x] Goals: areas of life with 1 day to 10 year goals, subgoals, linked tasks and progress
 - [x] Google Calendar: dated tasks go to an "Identity" calendar; your Google events show (read-only) on Today and the calendar
 - [x] Tasks: one-off to-dos with a due date and time, tags, notes and a reminder; shown on Today and the calendar, synced
+- [x] Notifications: reminder times on habits and tasks, an on/off switch per device, and a default reminder for new tasks
 
 ## Install
 
@@ -83,7 +84,16 @@ Both resize. They read the app's database on the phone, so ticks show in the app
 
 Open **Tasks**, or type into "Add a task" on Today. A task can have a due date and time, tags, notes and a reminder (at the due time, 15 minutes, an hour or a day before, or any time you pick). Tasks with a date show on that day in Today and on the calendar, and overdue ones stay on Today until done.
 
-Reminders: on Android they are scheduled with the system, so they arrive even when the app is closed (allow notifications when asked). On Windows the app shows them while it is running, including minimized.
+## Notifications
+
+Habits and tasks can both remind you:
+
+- **Habits:** open a habit on the Habits screen and add one or more times under **Reminders**. You get a notification at each time on days the habit is due, unless you've already logged it that day. A "times per week" habit stops reminding you for the rest of the week once you've reached its count.
+- **Tasks:** pick a reminder in the task editor. **Data → Notifications → Reminder for new tasks** sets the one new tasks start with, so every dated task can get one without picking it each time.
+
+Data → Notifications also turns notifications on or off for that device and sends a test one.
+
+On Android, reminders are scheduled with the system, so they arrive even when the app is closed (allow notifications when asked). Habit reminders are planned a week ahead and topped up whenever you open the app, so open it at least once a week. Ticking a habit on the home-screen widget cancels the rest of that day's reminders for it. On Windows, the app shows reminders while it's running, including when it's minimized.
 
 ## Google Calendar
 
