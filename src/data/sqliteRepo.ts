@@ -17,6 +17,7 @@ interface FieldRow { id: string; habit_id: string; label: string; kind: HabitFie
 interface TaskRow {
   id: string; title: string; notes: string; due_date: string | null; due_time: string | null;
   remind_at: string | null; done_at: string | null; created_at: string; updated_at: string; goal_id: string | null; sort_order: number | null;
+  important: number | null; urgent: number | null;
 }
 interface AreaRow { id: string; name: string; color: string; sort_order: number; created_at: string; updated_at: string }
 interface GoalRow {
@@ -45,6 +46,7 @@ function toEntry(e: EntryRow): HabitEntry {
 }
 
 const EARLY = "2000-01-01T00:00:00.000Z";
+const flag = (v: number | null | undefined) => (v == null ? null : v === 1);
 
 export class SqliteRepo implements Repo {
   constructor(private db: SqlDriver, private now: () => string = () => new Date().toISOString()) {}
@@ -148,7 +150,7 @@ export class SqliteRepo implements Repo {
       task: {
         id: r.id, title: r.title, notes: r.notes ?? "", dueDate: r.due_date, dueTime: r.due_time, remindAt: r.remind_at,
         doneAt: r.done_at, createdAt: r.created_at, tags: tags.filter((t) => t.task_id === r.id).map((t) => t.tag_id),
-        goalId: r.goal_id ?? null, sortOrder: r.sort_order ?? 0,
+        goalId: r.goal_id ?? null, sortOrder: r.sort_order ?? 0, important: flag(r.important), urgent: flag(r.urgent),
       },
     }));
   }
@@ -159,12 +161,13 @@ export class SqliteRepo implements Repo {
 
   private async writeTask(t: Task, updatedAt: string): Promise<void> {
     await this.db.execute(
-      `INSERT INTO task (id, title, notes, due_date, due_time, remind_at, done_at, created_at, updated_at, goal_id, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO task (id, title, notes, due_date, due_time, remind_at, done_at, created_at, updated_at, goal_id, sort_order, important, urgent)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET title = excluded.title, notes = excluded.notes, due_date = excluded.due_date,
          due_time = excluded.due_time, remind_at = excluded.remind_at, done_at = excluded.done_at, updated_at = excluded.updated_at,
-         goal_id = excluded.goal_id, sort_order = excluded.sort_order`,
-      [t.id, t.title, t.notes, t.dueDate, t.dueTime, t.remindAt, t.doneAt, t.createdAt, updatedAt, t.goalId ?? null, t.sortOrder ?? 0],
+         goal_id = excluded.goal_id, sort_order = excluded.sort_order, important = excluded.important, urgent = excluded.urgent`,
+      [t.id, t.title, t.notes, t.dueDate, t.dueTime, t.remindAt, t.doneAt, t.createdAt, updatedAt, t.goalId ?? null, t.sortOrder ?? 0,
+        t.important == null ? null : t.important ? 1 : 0, t.urgent == null ? null : t.urgent ? 1 : 0],
     );
     await this.db.execute("DELETE FROM task_tag WHERE task_id = ?", [t.id]);
     for (const tagId of t.tags) {

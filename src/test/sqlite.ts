@@ -23,5 +23,6 @@ export function memoryDriver(): SqlDriver {
   db.exec(migration("004_goals.sql"));
   db.exec(migration("005_habit_reminders.sql"));
   db.exec(migration("006_sort_order.sql"));
+  db.exec(migration("007_eisenhower.sql"));
   return driverFor(db);
 }

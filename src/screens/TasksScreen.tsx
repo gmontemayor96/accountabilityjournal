@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Icons } from "../components/Icons";
 import { QuickAddTask, TaskItem } from "../components/TaskItem";
+import { TaskMatrix } from "../components/TaskMatrix";
 import { todayKey } from "../domain/dates";
 import type { Task } from "../domain/model";
 import { useSortable } from "../hooks/useSortable";
@@ -15,7 +16,7 @@ const GROUPS: { key: Exclude<TaskGroup, "done">; label: string }[] = [
 ];
 
 export function TasksScreen() {
-  const { tasks, tags, editTask } = useStore();
+  const { tasks, tags, editTask, taskLayout, setTaskLayout } = useStore();
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const today = todayKey();
   const shown = tasks.filter((t) => !tagFilter || t.tags.includes(tagFilter));
@@ -30,11 +31,15 @@ export function TasksScreen() {
           <div className="sub">One-off things to do. Give them a date to see them on that day, and a reminder to get a nudge.</div>
         </div>
         <div className="tools">
+          <div className="seg" role="group" aria-label="Layout">
+            <button type="button" aria-pressed={taskLayout === "list"} onClick={() => void setTaskLayout("list")}>List</button>
+            <button type="button" aria-pressed={taskLayout === "matrix"} onClick={() => void setTaskLayout("matrix")}>Matrix</button>
+          </div>
           <button className="btn primary" onClick={() => editTask(blankTask(today))}>+ New task</button>
         </div>
       </header>
       <section className="canvas taskpage">
-        <QuickAddTask dueDate={null} placeholder="Add a task with no date, then press Enter" />
+        {taskLayout === "list" && <QuickAddTask dueDate={null} placeholder="Add a task with no date, then press Enter" />}
         {usedTags.length > 0 && (
           <div className="filters">
             <span className="label">Tag</span>
@@ -47,7 +52,8 @@ export function TasksScreen() {
           </div>
         )}
         {shown.length === 0 && <p className="empty">No tasks{tagFilter ? " with this tag" : " yet"}.</p>}
-        {GROUPS.map(({ key, label }) => {
+        {taskLayout === "matrix" && <TaskMatrix tasks={shown} />}
+        {taskLayout === "list" && GROUPS.map(({ key, label }) => {
           const list = shown.filter((t) => groupOf(t, today) === key);
           // Upcoming tasks stay in date order; dragging reorders those due the same day.
           if (key === "upcoming") list.sort((a, b) => a.dueDate!.localeCompare(b.dueDate!));

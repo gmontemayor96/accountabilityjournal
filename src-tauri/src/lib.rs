@@ -44,6 +44,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/006_sort_order.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 7,
+            description: "eisenhower matrix",
+            sql: include_str!("../migrations/007_eisenhower.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

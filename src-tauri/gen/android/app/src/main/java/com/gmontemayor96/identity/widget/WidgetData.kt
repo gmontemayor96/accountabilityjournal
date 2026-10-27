@@ -179,6 +179,41 @@ object WidgetData {
     rows
   }
 
+  /** Mirrors quadrantOf in src/tasks/matrix.ts. A task with neither flag set isn't in any box yet. */
+  private val QUADRANT_SQL = mapOf(
+    "do" to "important = 1 AND urgent = 1",
+    "schedule" to "important = 1 AND COALESCE(urgent, 0) = 0",
+    "delegate" to "COALESCE(important, 0) = 0 AND urgent = 1",
+    "drop" to "COALESCE(important, 0) = 0 AND COALESCE(urgent, 0) = 0 AND NOT (important IS NULL AND urgent IS NULL)",
+  )
+  val QUADRANTS = QUADRANT_SQL.keys.toList()
+
+  /** Open tasks in one box of the Eisenhower matrix, in the app's order. */
+  fun matrix(context: Context, quadrant: String): List<Row>? = withDb(context, write = false) { db ->
+    val where = QUADRANT_SQL[quadrant] ?: return@withDb emptyList<Row>()
+    val today = todayKey()
+    val rows = mutableListOf<Row>()
+    db.rawQuery(
+      "SELECT id, title, due_date, due_time FROM task WHERE done_at IS NULL AND $where ORDER BY sort_order, due_date, due_time, created_at",
+      null,
+    ).use { c ->
+      while (c.moveToNext()) {
+        val label = if (c.isNull(2)) "" else dayLabel(c.getString(2), today) + (if (c.isNull(3)) "" else " ${c.getString(3)}")
+        rows += Row.Item("task", c.getString(0), c.getString(1), label, false, null, toggleable = true)
+      }
+    }
+    rows
+  }
+
+  /** Open tasks per box, plus how many aren't sorted into one yet (under "unsorted"). */
+  fun matrixCounts(context: Context): Map<String, Int>? = withDb(context, write = false) { db ->
+    val counts = mutableMapOf<String, Int>()
+    for ((q, where) in QUADRANT_SQL + ("unsorted" to "important IS NULL AND urgent IS NULL")) {
+      counts[q] = db.rawQuery("SELECT COUNT(*) FROM task WHERE done_at IS NULL AND $where", null).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+    }
+    counts
+  }
+
   // Android's own SQLite is old on older phones (no upsert), so writes use plain UPDATE and INSERT.
 
   /** Ticks a task on or off. */

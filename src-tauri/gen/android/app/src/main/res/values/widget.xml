@@ -14,4 +14,18 @@
     <string name="widget_today_description">Tick off today\'s habits and tasks</string>
     <string name="widget_goals_description">Your goals and how far along they are</string>
     <string name="widget_no_data">Open Identity once to set it up.</string>
+    <color name="widget_quad">#FFF4F7F5</color>
+    <color name="widget_q_do">#FFC2456C</color>
+    <color name="widget_q_schedule">#FF2F78C4</color>
+    <color name="widget_q_delegate">#FFB07F1E</color>
+    <color name="widget_q_drop">#FF6E7A75</color>
+    <string name="widget_matrix_title">Priorities</string>
+    <string name="widget_matrix_label">Identity: Priorities</string>
+    <string name="widget_matrix_description">Your open tasks in an Eisenhower matrix</string>
+    <string name="widget_matrix_empty">Nothing here</string>
+    <string name="widget_matrix_unsorted">%1$d to sort</string>
+    <string name="widget_q_do">Do first</string>
+    <string name="widget_q_schedule">Schedule</string>
+    <string name="widget_q_delegate">Delegate</string>
+    <string name="widget_q_drop">Drop</string>
 </resources>

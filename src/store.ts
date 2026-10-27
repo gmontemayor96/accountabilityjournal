@@ -74,6 +74,11 @@ interface State {
   reorderHabits(ids: string[]): Promise<void>;
   reorderTasks(ids: string[]): Promise<void>;
   reorderGoals(ids: string[]): Promise<void>;
+  /** How the Tasks screen shows open tasks: grouped by date, or as an Eisenhower matrix. Kept per device. */
+  taskLayout: "list" | "matrix";
+  setTaskLayout(layout: "list" | "matrix"): Promise<void>;
+  /** Moves a task to an Eisenhower box and puts the box's tasks in `ids` order. */
+  moveTaskInMatrix(id: string, flags: { important: boolean; urgent: boolean }, ids: string[]): Promise<void>;
   /** The task open in the editor, or null. */
   editingTask: Task | null;
   editTask(task: Task | null): void;
@@ -132,6 +137,7 @@ function onWrites(repo: Repo, after: (method: string) => void): Repo {
 
 const CHOICES_KEY = "calendar.shown";
 const NOTIFY_KEY = "notify.settings";
+const LAYOUT_KEY = "tasks.layout";
 
 function parseNotify(json: string | null): State["notify"] {
   try {
@@ -254,6 +260,7 @@ export const useStore = create<State>((set, get) => {
           ...cacheState(await loadEventCache(repo)),
           calendarChoices: parseChoices(await repo.getSetting(CHOICES_KEY)),
           notify: parseNotify(await repo.getSetting(NOTIFY_KEY)),
+          taskLayout: (await repo.getSetting(LAYOUT_KEY)) === "matrix" ? "matrix" : "list",
           google: { ...get().google, connected: await isConnected(repo) },
         });
         if (isDesktopApp) {
@@ -279,6 +286,9 @@ export const useStore = create<State>((set, get) => {
               if (view === "day" || view === "goals") {
                 if (view === "day" && get().date !== todayKey()) await get().setDate(todayKey());
                 get().setView(view);
+              } else if (view === "matrix") {
+                await get().setTaskLayout("matrix");
+                get().setView("tasks");
               }
             };
             void fromWidget();
@@ -460,6 +470,19 @@ export const useStore = create<State>((set, get) => {
       const { list, changed } = applyOrder(get().goals, ids);
       set({ goals: list });
       for (const g of changed) await get().repo?.saveGoal(g);
+    },
+
+    taskLayout: "list",
+    async setTaskLayout(taskLayout) {
+      set({ taskLayout });
+      await get().repo?.setSetting(LAYOUT_KEY, taskLayout);
+    },
+
+    async moveTaskInMatrix(id, flags, ids) {
+      const task = get().tasks.find((t) => t.id === id);
+      if (!task) return;
+      if (!!task.important !== flags.important || !!task.urgent !== flags.urgent) await get().saveTask({ ...task, ...flags });
+      await get().reorderTasks(ids);
     },
 
     editTask: (editingTask) => set({ editingTask }),

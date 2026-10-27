@@ -20,12 +20,13 @@ Milestones 1 and 2 of 4 (see the [product and architecture spec](https://claude.
 - [x] Streaks: current and best, on Today and Habits (per-week habits count weeks)
 - [x] Daily automatic backups (last 30 kept), restore from any of them
 - [x] Export to JSON (re-importable) and CSV (habit log and journal), import JSON
-- [x] Android home-screen widgets: Today (tick habits and tasks) and Goals
+- [x] Android home-screen widgets: Today (tick habits and tasks), Goals and Priorities
 - [x] Goals: areas of life with 1 day to 10 year goals, subgoals, linked tasks and progress
 - [x] Google Calendar: dated tasks go to an "Identity" calendar; your Google events show (read-only) on Today and the calendar
 - [x] Tasks: one-off to-dos with a due date and time, tags, notes and a reminder; shown on Today and the calendar, synced
 - [x] Notifications: reminder times on habits and tasks, an on/off switch per device, and a default reminder for new tasks
 - [x] Drag to reorder habits (Habits page), tasks (Tasks page) and goals (Goals page); the order shows everywhere, including the widgets, and syncs
+- [x] Eisenhower matrix of tasks (Do first, Schedule, Delegate, Drop) with drag between boxes, and a matching widget
 
 ## Install
 
@@ -74,16 +75,21 @@ A goal's subgoals and linked tasks are its steps. Each card shows how many steps
 
 ## Android widgets
 
-Long-press your home screen, choose **Widgets**, find **Identity**, and drag out either widget:
+Long-press your home screen, choose **Widgets**, find **Identity**, and drag out any of the widgets:
 
 - **Identity: Today** shows today's habits and the tasks due today or overdue. Tap a tick box to mark a yes/no habit or a task done (or undo it). Habits you log as an amount or a rating, and the title, open the app on Today.
 - **Identity: Goals** shows each area's goals with their steps done and a progress bar. Tap a goal to open Goals in the app.
+- **Identity: Priorities** shows your open tasks in the four Eisenhower boxes. Tap a tick box to finish a task; tap the title to open the matrix in the app. The corner shows how many tasks still need sorting into a box.
 
-Both resize. They read the app's database on the phone, so ticks show in the app straight away and go to your other devices on the app's next sync. They refresh when you leave the app, after each tick, and every 30 minutes.
+All of them resize. They read the app's database on the phone, so ticks show in the app straight away and go to your other devices on the app's next sync. They refresh when you leave the app, after each tick, and every 30 minutes.
 
 ## Tasks
 
 Open **Tasks**, or type into "Add a task" on Today. A task can have a due date and time, tags, notes and a reminder (at the due time, 15 minutes, an hour or a day before, or any time you pick). Tasks with a date show on that day in Today and on the calendar, and overdue ones stay on Today until done.
+
+### Eisenhower matrix
+
+Switch **Tasks** from **List** to **Matrix** to see open tasks in four boxes: **Do first** (important and urgent), **Schedule** (important, not urgent), **Delegate** (urgent, not important) and **Drop** (neither). New and older tasks start under **Not sorted yet**. Drag a task by its handle into a box, or set **Important** and **Urgent** in the task editor. Dragging within a box changes the order, and each box has its own "Add a task" field. With the keyboard, arrow up and down reorder a task and left and right move it between urgent and not urgent. The app remembers which view you used last on each device.
 
 ## Notifications
 

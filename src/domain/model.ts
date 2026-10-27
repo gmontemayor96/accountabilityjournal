@@ -60,6 +60,9 @@ export interface Task {
   goalId?: string | null;
   /** Position set by dragging; ties keep date order. Missing on tasks saved before reordering. */
   sortOrder?: number;
+  /** Where the task sits in the Eisenhower matrix. Null (or missing) on both until it's placed there. */
+  important?: boolean | null;
+  urgent?: boolean | null;
 }
 
 /** A part of life the user cares about, such as Health or Career. Goals live in one. */
