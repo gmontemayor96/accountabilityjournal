@@ -7,6 +7,7 @@ import { isDesktopApp } from "./data";
 import type { Habit } from "./domain/model";
 import { DayScreen } from "./screens/DayScreen";
 import { GoalsScreen } from "./screens/GoalsScreen";
+import { FocusChip, FocusScreen } from "./screens/FocusScreen";
 import { HabitsScreen } from "./screens/HabitsScreen";
 import { CalendarScreen } from "./screens/CalendarScreen";
 import { JournalScreen } from "./screens/JournalScreen";
@@ -19,6 +20,7 @@ const NAV: { view: View; label: string; icon: keyof typeof Icons }[] = [
   { view: "day", label: "Today", icon: "day" },
   { view: "tasks", label: "Tasks", icon: "tasks" },
   { view: "goals", label: "Goals", icon: "goals" },
+  { view: "focus", label: "Focus", icon: "focus" },
   { view: "habits", label: "Habits", icon: "habits" },
   { view: "calendar", label: "Calendar", icon: "calendar" },
   { view: "journal", label: "Journal", icon: "journal" },
@@ -62,12 +64,14 @@ export default function App() {
         {status === "ready" && view === "day" && <DayScreen onEditHabit={openEditor} />}
         {status === "ready" && view === "tasks" && <TasksScreen />}
         {status === "ready" && view === "goals" && <GoalsScreen />}
+        {status === "ready" && view === "focus" && <FocusScreen />}
         {status === "ready" && view === "habits" && <HabitsScreen onEditHabit={openEditor} />}
         {status === "ready" && view === "calendar" && <CalendarScreen />}
         {status === "ready" && view === "journal" && <JournalScreen />}
         {status === "ready" && view === "tags" && <TagsScreen />}
         {status === "ready" && view === "sync" && <SyncScreen />}
       </main>
+      {status === "ready" && <FocusChip />}
       {editing && <HabitEditor habit={editing} onClose={() => setEditing(null)} />}
       {editingGoal && <GoalEditor goal={editingGoal} onClose={() => editGoal(null)} />}
       {editingTask && <TaskEditor key={editingTask.id} task={editingTask} onClose={() => editTask(null)} />}

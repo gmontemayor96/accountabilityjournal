@@ -77,19 +77,27 @@ const MAX_SCHEDULED = 300;
  * Keeps reminders in step with tasks and habits. Android schedules them with the system, so they fire
  * with the app closed. The desktop app shows them itself while it is running (checked every 30 s).
  */
-export async function scheduleAndroid(tasks: Task[], habits: HabitReminder[]): Promise<void> {
+export interface Scheduled {
+  when: Date;
+  id: number;
+  title: string;
+  body: string;
+}
+
+export async function scheduleAndroid(tasks: Task[], habits: HabitReminder[], extra: Scheduled[] = []): Promise<void> {
   const n = await import("@tauri-apps/plugin-notification");
   if (!(await n.isPermissionGranted())) return;
   await n.cancelAll();
   const now = localStamp(new Date());
-  const all = [
+  const all: Scheduled[] = [
+    ...extra,
     ...tasks
       .filter((t) => !t.doneAt && t.remindAt && t.remindAt > now)
-      .map((t) => ({ at: t.remindAt!, id: notificationId(t.id), title: t.title, body: body(t) })),
-    ...habits.map((r) => ({ at: r.at, id: habitNotificationId(r), title: r.habit.name, body: habitBody(r) })),
-  ].sort((a, b) => a.at.localeCompare(b.at));
+      .map((t) => ({ when: parseStamp(t.remindAt!), id: notificationId(t.id), title: t.title, body: body(t) })),
+    ...habits.map((r) => ({ when: parseStamp(r.at), id: habitNotificationId(r), title: r.habit.name, body: habitBody(r) })),
+  ].sort((a, b) => a.when.getTime() - b.when.getTime());
   for (const r of all.slice(0, MAX_SCHEDULED)) {
-    n.sendNotification({ id: r.id, title: r.title, body: r.body, schedule: n.Schedule.at(parseStamp(r.at), false, true) });
+    n.sendNotification({ id: r.id, title: r.title, body: r.body, schedule: n.Schedule.at(r.when, false, true) });
   }
 }
 

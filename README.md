@@ -26,6 +26,7 @@ Milestones 1 and 2 of 4 (see the [product and architecture spec](https://claude.
 - [x] Tasks: one-off to-dos with a due date and time, tags, notes and a reminder; shown on Today and the calendar, synced
 - [x] Notifications: reminder times on habits and tasks, an on/off switch per device, and a default reminder for new tasks
 - [x] Drag to reorder habits (Habits page), tasks (Tasks page) and goals (Goals page); the order shows everywhere, including the widgets, and syncs
+- [x] Focus: a customizable pomodoro timer (lengths, long-break interval, auto-start, chime) that can log focus minutes to a duration habit
 
 ## Install
 
@@ -95,6 +96,10 @@ Habits and tasks can both remind you:
 Data → Notifications also turns notifications on or off for that device and sends a test one.
 
 On Android, reminders are scheduled with the system, so they arrive even when the app is closed (allow notifications when asked). Habit reminders are planned a week ahead and topped up whenever you open the app, so open it at least once a week. Ticking a habit on the home-screen widget cancels the rest of that day's reminders for it. On Windows, the app shows reminders while it's running, including when it's minimized.
+
+## Focus timer
+
+Open **Focus** for a pomodoro timer. Pick a preset or set your own focus, short break and long break lengths, and how many focus sessions come before a long break. You can also choose whether the next phase starts by itself and whether a chime plays. Under **Working on** you can pick a Duration habit, which gets each finished session's minutes added to that day's entry, or a task you can tick off from there. A notification arrives when each phase ends, on Android even with the app closed. While the timer runs, a small clock on the other screens takes you back to it. The timer and its settings are kept on each device.
 
 ## Google Calendar
 

@@ -11,6 +11,7 @@ export const Icons = {
   goals: <svg viewBox="0 0 16 16" {...s}><circle cx="8" cy="8" r="6" /><circle cx="8" cy="8" r="3" /><circle cx="8" cy="8" r=".6" /></svg>,
   check: <svg viewBox="0 0 16 16" width="12" height="12" {...s} strokeWidth={2.2}><path d="m3.5 8.5 3 3 6-7" /></svg>,
   bell: <svg viewBox="0 0 16 16" width="12" height="12" {...s}><path d="M4 11V7a4 4 0 0 1 8 0v4l1.2 1.5H2.8zM6.5 14h3" /></svg>,
+  focus: <svg viewBox="0 0 16 16" {...s}><circle cx="8" cy="9" r="5.5" /><path d="M8 9V6.2M6.5 1.5h3M12.3 4.2l1-1" /></svg>,
   grip: <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><circle cx="6" cy="4" r="1.2" /><circle cx="10" cy="4" r="1.2" /><circle cx="6" cy="8" r="1.2" /><circle cx="10" cy="8" r="1.2" /><circle cx="6" cy="12" r="1.2" /><circle cx="10" cy="12" r="1.2" /></svg>,
   note: <svg viewBox="0 0 16 16" width="14" height="14" {...s}><path d="M2.5 3h11v7.5h-6L4.5 13v-2.5h-2z" /><path d="M5 5.8h6M5 8h4" /></svg>,
   edit: <svg viewBox="0 0 16 16" width="14" height="14" {...s}><path d="M10.5 2.5l3 3L6 13H3v-3z" /></svg>,
