@@ -4,18 +4,23 @@ import { addDays, todayKey } from "./domain/dates";
 import { emptyDay, newId, PALETTE, slugTagId, type Area, type Day, type Goal, type Habit, type HabitEntry, type Horizon, type Tag, type Task } from "./domain/model";
 import { toBackup } from "./data/exportFormats";
 import { applyOrder, nextOrder } from "./domain/order";
+import { chime } from "./focus/chime";
+import {
+  advance, cleanSettings, endMessage, idleState, logFocus, phaseMs, timeLeft, upcomingEnds,
+  type FocusLog, type PomodoroSettings, type PomodoroState,
+} from "./focus/pomodoro";
 import { writeBackup } from "./data/files";
 import { changeCount, isEmpty, planMerge } from "./sync/merge";
 import { syncOnce, type SyncResult } from "./sync/engine";
 import type { SyncData } from "./sync/types";
-import { dueReminders, remindersScheduledBySystem, ensurePermission, scheduleAndroid, sentKey, show, showHabitNow, showNow, type RemindKey } from "./tasks/reminders";
+import { dueReminders, remindersScheduledBySystem, ensurePermission, notificationId, scheduleAndroid, sentKey, show, showHabitNow, showNow, type RemindKey } from "./tasks/reminders";
 import { dueHabitReminders, entriesFrom, HABIT_REMINDER_DAYS, habitSentKey, upcomingHabitReminders } from "./tasks/habitReminders";
 import { googleSync, isConnected, loadEventCache, signIn, signOut } from "./google/client";
 import { calendarShown, type CalEvent, type CalInfo, type EventCache } from "./google/events";
 import { androidBridge, isAndroid } from "./sync/io";
 import { defaultDeviceName, tauriSyncIO } from "./sync/io";
 
-export type View = "day" | "tasks" | "goals" | "habits" | "calendar" | "journal" | "tags" | "sync";
+export type View = "day" | "tasks" | "goals" | "focus" | "habits" | "calendar" | "journal" | "tags" | "sync";
 
 interface State {
   repo: Repo | null;
@@ -85,6 +90,19 @@ interface State {
   /** Notification choices for this device: all on or off, and the reminder new tasks start with. */
   notify: { enabled: boolean; taskDefault: RemindKey };
   setNotify(change: Partial<State["notify"]>): Promise<void>;
+  /** The pomodoro timer on this device: its lengths, where it is, and focus time per day. */
+  pomodoro: { settings: PomodoroSettings; state: PomodoroState; log: FocusLog };
+  pomodoroStart(): Promise<void>;
+  pomodoroPause(): Promise<void>;
+  /** Back to the start of the current phase, stopped. With `all`, back to the first focus session. */
+  pomodoroReset(all?: boolean): Promise<void>;
+  /** Ends the current phase now without counting it, and moves to the next. */
+  pomodoroSkip(): Promise<void>;
+  pomodoroSettings(change: Partial<PomodoroSettings>): Promise<void>;
+  /** Sets what focus time counts toward: a duration habit (gets the minutes) or a task. */
+  pomodoroLink(link: { habitId: string | null; taskId: string | null }): Promise<void>;
+  /** Moves the timer on when a phase has ended: counts focus time and alerts. Runs every second. */
+  tickPomodoro(): Promise<void>;
   /** Asks for permission if needed, then shows a notification right away. False when permission is refused. */
   testNotification(): Promise<boolean>;
 
@@ -132,6 +150,26 @@ function onWrites(repo: Repo, after: (method: string) => void): Repo {
 
 const CHOICES_KEY = "calendar.shown";
 const NOTIFY_KEY = "notify.settings";
+const POMODORO_KEY = "pomodoro";
+
+function parsePomodoro(json: string | null): State["pomodoro"] {
+  try {
+    const raw = JSON.parse(json ?? "{}");
+    const settings = cleanSettings(raw.settings);
+    const st = raw.state;
+    const state: PomodoroState = st && ["focus", "short", "long"].includes(st.phase)
+      ? {
+          phase: st.phase, round: Number(st.round) || 0, endsAt: typeof st.endsAt === "string" ? st.endsAt : null,
+          remaining: Number(st.remaining) > 0 ? Number(st.remaining) : phaseMs(settings, st.phase),
+          habitId: st.habitId ?? null, taskId: st.taskId ?? null,
+        }
+      : idleState(settings);
+    return { settings, state, log: raw.log && typeof raw.log === "object" ? raw.log : {} };
+  } catch {
+    const settings = cleanSettings(null);
+    return { settings, state: idleState(settings), log: {} };
+  }
+}
 
 function parseNotify(json: string | null): State["notify"] {
   try {
@@ -192,6 +230,28 @@ export const useStore = create<State>((set, get) => {
     await get().setDate(get().date);
   }
 
+  /** Keeps the timer and saves it on this device; Android's alarms follow it. */
+  async function savePomodoro(pomodoro: State["pomodoro"]) {
+    set({ pomodoro });
+    await get().repo?.setSetting(POMODORO_KEY, JSON.stringify(pomodoro));
+    if (isAndroid) void get().checkReminders();
+  }
+
+  /** Adds focus minutes to a duration habit's entry for a day. */
+  async function addHabitMinutes(habitId: string, date: string, minutes: number) {
+    const { repo, habits } = get();
+    const habit = habits.find((h) => h.id === habitId);
+    if (!repo || !habit || habit.archivedAt || habit.type !== "duration") return;
+    if (get().date === date) {
+      updateEntry(habitId, (e) => ({ ...e, value: (e.value ?? 0) + minutes, loggedAt: e.value === null ? new Date().toISOString() : e.loggedAt }));
+      persistEntry(habitId, true);
+      return;
+    }
+    const { entries } = await repo.loadDay(date);
+    const e = entries.find((x) => x.habitId === habitId) ?? { habitId, date, value: null, note: "", fields: {}, loggedAt: new Date().toISOString() };
+    await repo.saveEntry({ ...e, value: (e.value ?? 0) + minutes });
+  }
+
   function updateDay(change: Partial<Day>, immediate: boolean) {
     const day = { ...get().day, ...change };
     set({ day });
@@ -220,6 +280,7 @@ export const useStore = create<State>((set, get) => {
     primaryOnly: false,
     calendarChoices: {},
     notify: { enabled: true, taskDefault: "" },
+    pomodoro: parsePomodoro(null),
     google: { connected: false, syncing: false, lastAt: null, error: null },
 
     async init() {
@@ -254,6 +315,7 @@ export const useStore = create<State>((set, get) => {
           ...cacheState(await loadEventCache(repo)),
           calendarChoices: parseChoices(await repo.getSetting(CHOICES_KEY)),
           notify: parseNotify(await repo.getSetting(NOTIFY_KEY)),
+          pomodoro: parsePomodoro(await repo.getSetting(POMODORO_KEY)),
           google: { ...get().google, connected: await isConnected(repo) },
         });
         if (isDesktopApp) {
@@ -266,6 +328,8 @@ export const useStore = create<State>((set, get) => {
             setInterval(() => void get().googleSyncNow(), 10 * 60_000);
           }
           if (!remindersScheduledBySystem) setInterval(() => void get().checkReminders(), 30_000);
+          setInterval(() => void get().tickPomodoro(), 1000);
+          document.addEventListener("visibilitychange", () => void get().tickPomodoro());
           // Pick up other devices' changes when the app comes back into view, and every minute while open.
           document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && void get().syncNow());
           window.addEventListener("focus", () => void get().syncNow());
@@ -536,7 +600,9 @@ export const useStore = create<State>((set, get) => {
         const withTimes = notify.enabled ? habits.filter((h) => h.reminders?.length) : [];
         const entries = withTimes.length ? (await repo.loadRange(entriesFrom(now), addDays(today, HABIT_REMINDER_DAYS))).entries : [];
         if (remindersScheduledBySystem) {
-          return await scheduleAndroid(notify.enabled ? tasks : [], upcomingHabitReminders(withTimes, entries, now));
+          const { settings, state } = get().pomodoro;
+          const timer = upcomingEnds(state, settings).map((e) => ({ when: e.at, id: notificationId(`pomodoro@${e.at.toISOString()}`), ...endMessage(e.phase, e.next) }));
+          return await scheduleAndroid(notify.enabled ? tasks : [], upcomingHabitReminders(withTimes, entries, now), notify.enabled ? timer : []);
         }
         if (!notify.enabled) return;
         const sent = new Set<string>(JSON.parse((await repo.getSetting("reminders.sent")) ?? "[]"));
@@ -564,6 +630,68 @@ export const useStore = create<State>((set, get) => {
       set({ notify });
       await get().repo?.setSetting(NOTIFY_KEY, JSON.stringify(notify));
       await get().checkReminders();
+    },
+
+    async pomodoroStart() {
+      const p = get().pomodoro;
+      if (p.state.endsAt) return;
+      if (isDesktopApp) await ensurePermission().catch(() => false);
+      await savePomodoro({ ...p, state: { ...p.state, endsAt: new Date(Date.now() + p.state.remaining).toISOString() } });
+    },
+
+    async pomodoroPause() {
+      const p = get().pomodoro;
+      if (!p.state.endsAt) return;
+      await savePomodoro({ ...p, state: { ...p.state, endsAt: null, remaining: timeLeft(p.state, new Date()) } });
+    },
+
+    async pomodoroReset(all = false) {
+      const p = get().pomodoro;
+      const { habitId, taskId } = p.state;
+      const state = all ? { ...idleState(p.settings), habitId, taskId } : { ...p.state, endsAt: null, remaining: phaseMs(p.settings, p.state.phase) };
+      await savePomodoro({ ...p, state });
+    },
+
+    async pomodoroSkip() {
+      const p = get().pomodoro;
+      const { state } = advance({ ...p.state, endsAt: new Date(0).toISOString() }, { ...p.settings, autoStart: false }, new Date());
+      // Skipping keeps the timer going if it was running.
+      const endsAt = p.state.endsAt ? new Date(Date.now() + state.remaining).toISOString() : null;
+      await savePomodoro({ ...p, state: { ...state, endsAt } });
+    },
+
+    async pomodoroSettings(change) {
+      const p = get().pomodoro;
+      const settings = cleanSettings({ ...p.settings, ...change });
+      // A phase that hasn't started yet takes on its new length.
+      const fresh = !p.state.endsAt && p.state.remaining === phaseMs(p.settings, p.state.phase);
+      const state = fresh ? { ...p.state, remaining: phaseMs(settings, p.state.phase) } : p.state;
+      await savePomodoro({ ...p, settings, state });
+    },
+
+    async pomodoroLink(link) {
+      const p = get().pomodoro;
+      await savePomodoro({ ...p, state: { ...p.state, ...link } });
+    },
+
+    async tickPomodoro() {
+      const p = get().pomodoro;
+      if (!p.state.endsAt || Date.parse(p.state.endsAt) > Date.now()) return;
+      const { state, finished } = advance(p.state, p.settings, new Date());
+      let log = p.log;
+      for (const f of finished.filter((x) => x.phase === "focus")) {
+        log = logFocus(log, todayKey(f.endedAt), p.settings.focus);
+        if (p.state.habitId) await addHabitMinutes(p.state.habitId, todayKey(f.endedAt), p.settings.focus);
+      }
+      await savePomodoro({ ...p, state, log });
+      const last = finished[finished.length - 1];
+      if (!last) return;
+      if (document.visibilityState === "visible" && p.settings.sound) chime();
+      // Android already showed it from the alarm set when the phase started.
+      if (!isAndroid && get().notify.enabled) {
+        const msg = endMessage(last.phase, state.phase);
+        await show(msg.title, msg.body).catch(() => {});
+      }
     },
 
     async testNotification() {
