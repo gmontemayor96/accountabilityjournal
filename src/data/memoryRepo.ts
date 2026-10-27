@@ -102,7 +102,7 @@ export class MemoryRepo implements Repo {
     for (const t of this.s.tasks ?? []) t.tags = t.tags.filter((x) => x !== id);
   }
   async loadTasks() {
-    return structuredClone(this.s.tasks ?? []).sort((a, b) =>
+    return structuredClone(this.s.tasks ?? []).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) ||
       (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999") || (a.dueTime ?? "").localeCompare(b.dueTime ?? "") || a.createdAt.localeCompare(b.createdAt));
   }
   async saveTask(t: Task) {
@@ -136,7 +136,7 @@ export class MemoryRepo implements Repo {
     this.bury(t);
   }
   async loadGoals() {
-    return structuredClone(this.s.goals ?? []).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    return structuredClone(this.s.goals ?? []).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.createdAt.localeCompare(b.createdAt));
   }
   async saveGoal(g: Goal) {
     upsert((this.s.goals ??= []), structuredClone(g));

@@ -1,3 +1,4 @@
+import type { HTMLAttributes, ReactNode } from "react";
 import type { Task } from "../domain/model";
 import { blankTask, useStore } from "../store";
 import { localStamp, reminderFor } from "../tasks/reminders";
@@ -5,13 +6,14 @@ import { dueLabel, groupOf } from "../tasks/taskDates";
 import { Icons } from "./Icons";
 
 /** One task: a checkbox, its title, when it's due, and its tags. Clicking the title opens the editor. */
-export function TaskItem({ task }: { task: Task }) {
+export function TaskItem({ task, handle, ...rest }: { task: Task; handle?: ReactNode } & HTMLAttributes<HTMLDivElement>) {
   const { tags, goals, areas, toggleTask, editTask } = useStore();
   const goal = task.goalId ? goals.find((g) => g.id === task.goalId) : undefined;
   const area = goal && areas.find((a) => a.id === goal.areaId);
   const overdue = groupOf(task) === "overdue";
   return (
-    <div className={`task${task.doneAt ? " done" : ""}`}>
+    <div className={`task${task.doneAt ? " done" : ""}`} {...rest}>
+      {handle}
       <button type="button" className="check" role="checkbox" aria-checked={!!task.doneAt} aria-label={`Done: ${task.title}`} onClick={() => toggleTask(task.id)}>
         {task.doneAt && Icons.check}
       </button>

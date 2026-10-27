@@ -16,12 +16,12 @@ interface HabitRow {
 interface FieldRow { id: string; habit_id: string; label: string; kind: HabitField["kind"] }
 interface TaskRow {
   id: string; title: string; notes: string; due_date: string | null; due_time: string | null;
-  remind_at: string | null; done_at: string | null; created_at: string; updated_at: string; goal_id: string | null;
+  remind_at: string | null; done_at: string | null; created_at: string; updated_at: string; goal_id: string | null; sort_order: number | null;
 }
 interface AreaRow { id: string; name: string; color: string; sort_order: number; created_at: string; updated_at: string }
 interface GoalRow {
   id: string; area_id: string; parent_id: string | null; title: string; notes: string; horizon: Horizon;
-  done_at: string | null; created_at: string; updated_at: string;
+  done_at: string | null; created_at: string; updated_at: string; sort_order: number | null;
 }
 interface EntryRow { habit_id: string; date: string; value: number | null; note: string; fields: string; logged_at: string }
 
@@ -141,14 +141,14 @@ export class SqliteRepo implements Repo {
   }
 
   private async taskRows(): Promise<{ task: Task; updatedAt: string }[]> {
-    const rows = await this.db.select<TaskRow>("SELECT * FROM task ORDER BY due_date IS NULL, due_date, due_time, created_at");
+    const rows = await this.db.select<TaskRow>("SELECT * FROM task ORDER BY sort_order, due_date IS NULL, due_date, due_time, created_at");
     const tags = await this.db.select<{ task_id: string; tag_id: string }>("SELECT task_id, tag_id FROM task_tag");
     return rows.map((r) => ({
       updatedAt: r.updated_at || EARLY,
       task: {
         id: r.id, title: r.title, notes: r.notes ?? "", dueDate: r.due_date, dueTime: r.due_time, remindAt: r.remind_at,
         doneAt: r.done_at, createdAt: r.created_at, tags: tags.filter((t) => t.task_id === r.id).map((t) => t.tag_id),
-        goalId: r.goal_id ?? null,
+        goalId: r.goal_id ?? null, sortOrder: r.sort_order ?? 0,
       },
     }));
   }
@@ -159,12 +159,12 @@ export class SqliteRepo implements Repo {
 
   private async writeTask(t: Task, updatedAt: string): Promise<void> {
     await this.db.execute(
-      `INSERT INTO task (id, title, notes, due_date, due_time, remind_at, done_at, created_at, updated_at, goal_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO task (id, title, notes, due_date, due_time, remind_at, done_at, created_at, updated_at, goal_id, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET title = excluded.title, notes = excluded.notes, due_date = excluded.due_date,
          due_time = excluded.due_time, remind_at = excluded.remind_at, done_at = excluded.done_at, updated_at = excluded.updated_at,
-         goal_id = excluded.goal_id`,
-      [t.id, t.title, t.notes, t.dueDate, t.dueTime, t.remindAt, t.doneAt, t.createdAt, updatedAt, t.goalId ?? null],
+         goal_id = excluded.goal_id, sort_order = excluded.sort_order`,
+      [t.id, t.title, t.notes, t.dueDate, t.dueTime, t.remindAt, t.doneAt, t.createdAt, updatedAt, t.goalId ?? null, t.sortOrder ?? 0],
     );
     await this.db.execute("DELETE FROM task_tag WHERE task_id = ?", [t.id]);
     for (const tagId of t.tags) {
@@ -227,12 +227,12 @@ export class SqliteRepo implements Repo {
   }
 
   private async goalRows(): Promise<{ goal: Goal; updatedAt: string }[]> {
-    const rows = await this.db.select<GoalRow>("SELECT * FROM goal ORDER BY created_at");
+    const rows = await this.db.select<GoalRow>("SELECT * FROM goal ORDER BY sort_order, created_at");
     return rows.map((r) => ({
       updatedAt: r.updated_at || EARLY,
       goal: {
         id: r.id, areaId: r.area_id, parentId: r.parent_id, title: r.title, notes: r.notes ?? "", horizon: r.horizon,
-        doneAt: r.done_at, createdAt: r.created_at,
+        doneAt: r.done_at, createdAt: r.created_at, sortOrder: r.sort_order ?? 0,
       },
     }));
   }
@@ -247,10 +247,11 @@ export class SqliteRepo implements Repo {
 
   private async writeGoal(g: Goal, updatedAt: string): Promise<void> {
     await this.db.execute(
-      `INSERT INTO goal (id, area_id, parent_id, title, notes, horizon, done_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO goal (id, area_id, parent_id, title, notes, horizon, done_at, created_at, updated_at, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET area_id = excluded.area_id, parent_id = excluded.parent_id, title = excluded.title,
-         notes = excluded.notes, horizon = excluded.horizon, done_at = excluded.done_at, updated_at = excluded.updated_at`,
-      [g.id, g.areaId, g.parentId, g.title, g.notes, g.horizon, g.doneAt, g.createdAt, updatedAt],
+         notes = excluded.notes, horizon = excluded.horizon, done_at = excluded.done_at, updated_at = excluded.updated_at,
+         sort_order = excluded.sort_order`,
+      [g.id, g.areaId, g.parentId, g.title, g.notes, g.horizon, g.doneAt, g.createdAt, updatedAt, g.sortOrder ?? 0],
     );
     await this.db.execute("DELETE FROM tombstone WHERE kind = 'goal' AND key = ?", [g.id]);
   }

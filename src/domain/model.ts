@@ -58,6 +58,8 @@ export interface Task {
   tags: string[];
   /** The goal this task moves forward, if any. Missing on tasks saved before goals. */
   goalId?: string | null;
+  /** Position set by dragging; ties keep date order. Missing on tasks saved before reordering. */
+  sortOrder?: number;
 }
 
 /** A part of life the user cares about, such as Health or Career. Goals live in one. */
@@ -83,6 +85,8 @@ export interface Goal {
   /** Set when a goal with no subgoals or tasks is ticked off. Goals with them are done when they all are. */
   doneAt: string | null;
   createdAt: string;
+  /** Position within its bucket, set by dragging. Missing on goals saved before reordering. */
+  sortOrder?: number;
 }
 
 export interface Tag {

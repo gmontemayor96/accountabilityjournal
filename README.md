@@ -25,6 +25,7 @@ Milestones 1 and 2 of 4 (see the [product and architecture spec](https://claude.
 - [x] Google Calendar: dated tasks go to an "Identity" calendar; your Google events show (read-only) on Today and the calendar
 - [x] Tasks: one-off to-dos with a due date and time, tags, notes and a reminder; shown on Today and the calendar, synced
 - [x] Notifications: reminder times on habits and tasks, an on/off switch per device, and a default reminder for new tasks
+- [x] Drag to reorder habits (Habits page), tasks (Tasks page) and goals (Goals page); the order shows everywhere, including the widgets, and syncs
 
 ## Install
 

@@ -328,3 +328,9 @@ input[type=date], input[type=time], input[type=datetime-local] { background: var
 .subgoal .pct { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
 .goal .tbody { grid-template-columns: minmax(0, 1fr); }
 .goal .tmeta > * { min-width: 0; }
+
+/* Drag to reorder */
+.draghandle { flex: none; border: 0; background: none; color: var(--muted); padding: 4px 2px; min-width: 28px; min-height: 28px; border-radius: 4px; cursor: grab; touch-action: none; display: grid; place-items: center; align-self: center; }
+.draghandle:hover, .draghandle:focus-visible { color: var(--fg); background: var(--surface-2); }
+[data-dragging] { opacity: .75; box-shadow: 0 8px 20px -8px rgb(0 0 0 / .35); position: relative; z-index: 1; }
+[data-dragging] .draghandle { cursor: grabbing; }

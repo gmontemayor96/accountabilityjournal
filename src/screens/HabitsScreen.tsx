@@ -3,22 +3,24 @@ import type { Habit } from "../domain/model";
 import { describeSchedule } from "../domain/schedule";
 import { describeStreak } from "../domain/streaks";
 import { getHabitType } from "../habitTypes";
+import { useSortable } from "../hooks/useSortable";
 import { useStreaks } from "../hooks/useStreaks";
 import { useStore } from "../store";
 
 export function HabitsScreen({ onEditHabit }: { onEditHabit: (h?: Habit) => void }) {
-  const { habits, tags, setArchived } = useStore();
+  const { habits, tags, setArchived, reorderHabits } = useStore();
   const streaks = useStreaks();
   const active = habits.filter((h) => !h.archivedAt);
   const archived = habits.filter((h) => h.archivedAt);
   const tag = (id: string) => tags.find((t) => t.id === id);
+  const sort = useSortable(active, reorderHabits);
 
   return (
     <>
       <header className="viewhead">
         <div>
           <h1>Habits</h1>
-          <div className="sub">Each habit is a module: a type, a schedule, tags and any extra fields you want to log.</div>
+          <div className="sub">Each habit is a module: a type, a schedule, tags and any extra fields you want to log. Drag ⠿ to change their order everywhere.</div>
         </div>
         <div className="tools">
           <button className="btn primary" onClick={() => onEditHabit()}>+ New habit</button>
@@ -27,11 +29,12 @@ export function HabitsScreen({ onEditHabit }: { onEditHabit: (h?: Habit) => void
       <section className="canvas">
         {active.length === 0 && <p className="empty">No habits yet. Add one to start tracking.</p>}
         <div className="hgrid">
-          {active.map((h) => {
+          {sort.items.map((h) => {
             const type = getHabitType(h.type);
             return (
-              <article key={h.id} className="hcard">
+              <article key={h.id} className="hcard" {...sort.item(h.id)}>
                 <div className="h">
+                  {active.length > 1 && <button {...sort.handle(h.id, h.name)}>{Icons.grip}</button>}
                   <span className="dot big" style={{ background: h.color }} />
                   <span className="name">{h.name}</span>
                   <button className="iconbtn" aria-label={`Edit ${h.name}`} onClick={() => onEditHabit(h)}>{Icons.edit}</button>

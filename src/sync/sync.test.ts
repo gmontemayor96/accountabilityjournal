@@ -124,7 +124,7 @@ describe("sync", () => {
     a.clock.set("2026-10-20T10:00:00Z");
     await a.repo.saveTag({ id: "mind", name: "mind", color: "#9B6BD6" });
     const task = { id: "t1", title: "Call the dentist", notes: "", dueDate: "2026-10-27", dueTime: "09:00", remindAt: "2026-10-27T08:45",
-      doneAt: null, createdAt: "2026-10-20T10:00:00.000Z", tags: ["mind"], goalId: null };
+      doneAt: null, createdAt: "2026-10-20T10:00:00.000Z", tags: ["mind"], goalId: null, sortOrder: 0 };
     await a.repo.saveTask(task);
     await a.repo.saveTask({ ...task, id: "t2", title: "Buy stamps", dueDate: null, dueTime: null, remindAt: null, tags: [] });
     await pull(b.repo, a.repo);
@@ -197,6 +197,7 @@ describe("sync", () => {
     db.exec(migration("003_tasks.sql"));
     db.exec(migration("004_goals.sql"));
     db.exec(migration("005_habit_reminders.sql"));
+    db.exec(migration("006_sort_order.sql"));
     const snap = await new SqliteRepo(driverFor(db)).snapshot();
     expect(snap.habits[0].updatedAt).toBe("2026-01-01T00:00:00Z");
     expect(snap.entries[0].updatedAt).toBe("2026-01-02T09:00:00Z");
