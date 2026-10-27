@@ -1,6 +1,9 @@
 import { useState } from "react";
+import { Icons } from "../components/Icons";
 import { QuickAddTask, TaskItem } from "../components/TaskItem";
 import { todayKey } from "../domain/dates";
+import type { Task } from "../domain/model";
+import { useSortable } from "../hooks/useSortable";
 import { blankTask, useStore } from "../store";
 import { groupOf, type TaskGroup } from "../tasks/taskDates";
 
@@ -46,11 +49,13 @@ export function TasksScreen() {
         {shown.length === 0 && <p className="empty">No tasks{tagFilter ? " with this tag" : " yet"}.</p>}
         {GROUPS.map(({ key, label }) => {
           const list = shown.filter((t) => groupOf(t, today) === key);
+          // Upcoming tasks stay in date order; dragging reorders those due the same day.
+          if (key === "upcoming") list.sort((a, b) => a.dueDate!.localeCompare(b.dueDate!));
           if (!list.length) return null;
           return (
             <div key={key} className="taskgroup">
               <h3 className={key === "overdue" ? "overdue" : undefined}>{label} <span className="count">{list.length}</span></h3>
-              {list.map((t) => <TaskItem key={t.id} task={t} />)}
+              <SortableTasks tasks={list} sameDay={key === "upcoming"} />
             </div>
           );
         })}
@@ -61,6 +66,22 @@ export function TasksScreen() {
           </details>
         )}
       </section>
+    </>
+  );
+}
+
+/** One group of open tasks, reordered by dragging. */
+function SortableTasks({ tasks, sameDay }: { tasks: Task[]; sameDay: boolean }) {
+  const reorderTasks = useStore((s) => s.reorderTasks);
+  const sort = useSortable(tasks, reorderTasks, sameDay ? (a, b) => a.dueDate === b.dueDate : undefined);
+  // A task only gets a handle when there's something it can swap with.
+  const movable = (t: Task) => tasks.some((x) => x.id !== t.id && (!sameDay || x.dueDate === t.dueDate));
+  return (
+    <>
+      {sort.items.map((t) => (
+        <TaskItem key={t.id} task={t} {...sort.item(t.id)}
+          handle={movable(t) ? <button {...sort.handle(t.id, t.title)}>{Icons.grip}</button> : undefined} />
+      ))}
     </>
   );
 }

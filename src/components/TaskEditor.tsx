@@ -99,7 +99,7 @@ export function TaskEditor({ task, onClose }: { task: Task; onClose: () => void 
               <select id="task-goal" value={goals.some((g) => g.id === d.goalId) ? d.goalId! : ""} onChange={(e) => update({ goalId: e.target.value || null })}>
                 <option value="">No goal</option>
                 {areas.map((a) => {
-                  const list = goals.filter((g) => g.areaId === a.id).sort((x, y) => rank(x.horizon) - rank(y.horizon) || x.title.localeCompare(y.title));
+                  const list = goals.filter((g) => g.areaId === a.id).sort((x, y) => rank(x.horizon) - rank(y.horizon));
                   return list.length ? (
                     <optgroup key={a.id} label={a.name}>
                       {list.map((g) => <option key={g.id} value={g.id}>{horizonLabel(g.horizon)}: {g.title}</option>)}

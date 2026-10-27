@@ -120,7 +120,7 @@ object WidgetData {
     db.rawQuery(
       """SELECT id, title, due_date, due_time, done_at FROM task
          WHERE due_date = ? OR (done_at IS NULL AND due_date IS NOT NULL AND due_date < ?)
-         ORDER BY due_date, due_time IS NULL, due_time, created_at""",
+         ORDER BY sort_order, due_date, due_time, created_at""",
       arrayOf(today, today),
     ).use { c ->
       while (c.moveToNext()) {
@@ -153,7 +153,7 @@ object WidgetData {
       while (c.moveToNext()) areas += Triple(c.getString(0), c.getString(1), parseColor(c.getString(2)))
     }
     val goals = mutableListOf<Goal>()
-    db.rawQuery("SELECT id, area_id, parent_id, title, horizon, done_at FROM goal ORDER BY created_at", null).use { c ->
+    db.rawQuery("SELECT id, area_id, parent_id, title, horizon, done_at FROM goal ORDER BY sort_order, created_at", null).use { c ->
       while (c.moveToNext()) goals += Goal(c.getString(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4), c.getString(5))
     }
     val tasks = mutableListOf<Pair<String, Boolean>>()

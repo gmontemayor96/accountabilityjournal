@@ -3,6 +3,7 @@ import { isDesktopApp, openRepo, type Repo } from "./data";
 import { addDays, todayKey } from "./domain/dates";
 import { emptyDay, newId, PALETTE, slugTagId, type Area, type Day, type Goal, type Habit, type HabitEntry, type Horizon, type Tag, type Task } from "./domain/model";
 import { toBackup } from "./data/exportFormats";
+import { applyOrder, nextOrder } from "./domain/order";
 import { writeBackup } from "./data/files";
 import { changeCount, isEmpty, planMerge } from "./sync/merge";
 import { syncOnce, type SyncResult } from "./sync/engine";
@@ -69,6 +70,10 @@ interface State {
   /** Shows a date on the Today screen. */
   openDay(date: string): Promise<void>;
   saveHabit(habit: Habit): Promise<void>;
+  /** Saves a new order for some habits, tasks or goals (one list on screen); the rest keep their places. */
+  reorderHabits(ids: string[]): Promise<void>;
+  reorderTasks(ids: string[]): Promise<void>;
+  reorderGoals(ids: string[]): Promise<void>;
   /** The task open in the editor, or null. */
   editingTask: Task | null;
   editTask(task: Task | null): void;
@@ -439,6 +444,24 @@ export const useStore = create<State>((set, get) => {
       void get().checkReminders();
     },
 
+    async reorderHabits(ids) {
+      const { list, changed } = applyOrder(get().habits, ids);
+      set({ habits: list });
+      for (const h of changed) await get().repo?.saveHabit(h);
+    },
+
+    async reorderTasks(ids) {
+      const { list, changed } = applyOrder(get().tasks, ids);
+      set({ tasks: list });
+      for (const t of changed) await get().repo?.saveTask(t);
+    },
+
+    async reorderGoals(ids) {
+      const { list, changed } = applyOrder(get().goals, ids);
+      set({ goals: list });
+      for (const g of changed) await get().repo?.saveGoal(g);
+    },
+
     editTask: (editingTask) => set({ editingTask }),
 
     areas: [],
@@ -465,6 +488,7 @@ export const useStore = create<State>((set, get) => {
 
     async saveGoal(goal) {
       const { repo, goals } = get();
+      if (!goals.some((g) => g.id === goal.id)) goal = { ...goal, sortOrder: nextOrder(goals) };
       await repo?.saveGoal(goal);
       set({ goals: goals.some((g) => g.id === goal.id) ? goals.map((g) => (g.id === goal.id ? goal : g)) : [...goals, goal] });
     },
@@ -485,6 +509,7 @@ export const useStore = create<State>((set, get) => {
 
     async saveTask(task) {
       const { repo, tasks } = get();
+      if (!tasks.some((t) => t.id === task.id)) task = { ...task, sortOrder: nextOrder(tasks) };
       await repo?.saveTask(task);
       const exists = tasks.some((t) => t.id === task.id);
       set({ tasks: exists ? tasks.map((t) => (t.id === task.id ? task : t)) : [...tasks, task] });

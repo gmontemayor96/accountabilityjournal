@@ -38,6 +38,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/005_habit_reminders.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 6,
+            description: "task and goal order",
+            sql: include_str!("../migrations/006_sort_order.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

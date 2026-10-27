@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, type HTMLAttributes, type ReactNode } from "react";
 import { AreaEditor } from "../components/AreaEditor";
 import { Icons } from "../components/Icons";
 import { Ring } from "../components/Ring";
 import { ancestors, goalProgress, HORIZONS, pctLabel } from "../domain/goals";
 import type { Area, Goal } from "../domain/model";
+import { useSortable } from "../hooks/useSortable";
 import { blankArea, blankGoal, useStore } from "../store";
 
 export function GoalsScreen() {
@@ -63,7 +64,7 @@ export function GoalsScreen() {
                     return (
                       <div key={key} className="bucket">
                         <h3>{label} {list.length > 0 && <span className="count">{done}/{list.length} done</span>}</h3>
-                        {list.map((g) => <GoalCard key={g.id} goal={g} color={area.color} />)}
+                        <SortableGoals goals={list} color={area.color} />
                         <button className="linkbtn addtask" onClick={() => editGoal(blankGoal(area.id, key))}>+ Add a {label} goal</button>
                       </div>
                     );
@@ -86,14 +87,15 @@ export function GoalsScreen() {
 }
 
 /** A goal in its bucket: a ring with its share done, steps done out of all, and what it leads to. */
-export function GoalCard({ goal, color }: { goal: Goal; color: string }) {
+export function GoalCard({ goal, color, handle, ...rest }: { goal: Goal; color: string; handle?: ReactNode } & HTMLAttributes<HTMLDivElement>) {
   const { goals, tasks, editGoal, toggleGoal } = useStore();
   const p = goalProgress(goal, goals, tasks);
   const steps = p.subgoals.total + p.tasks.total;
   const stepsDone = p.subgoals.done + p.tasks.done;
   const parent = ancestors(goal, goals)[0];
   return (
-    <div className={`goal${p.done ? " done" : ""}`}>
+    <div className={`goal${p.done ? " done" : ""}`} {...rest}>
+      {handle}
       {steps === 0 ? (
         <button type="button" className="check" role="checkbox" aria-checked={p.done} aria-label={`Done: ${goal.title}`} onClick={() => toggleGoal(goal.id)}>
           {p.done && Icons.check}
@@ -112,5 +114,19 @@ export function GoalCard({ goal, color }: { goal: Goal; color: string }) {
         </span>
       </button>
     </div>
+  );
+}
+
+/** The goals in one bucket, reordered by dragging. */
+function SortableGoals({ goals, color }: { goals: Goal[]; color: string }) {
+  const reorderGoals = useStore((s) => s.reorderGoals);
+  const sort = useSortable(goals, reorderGoals);
+  return (
+    <>
+      {sort.items.map((g) => (
+        <GoalCard key={g.id} goal={g} color={color} {...sort.item(g.id)}
+          handle={goals.length > 1 ? <button {...sort.handle(g.id, g.title)}>{Icons.grip}</button> : undefined} />
+      ))}
+    </>
   );
 }
