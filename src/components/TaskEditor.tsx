@@ -4,6 +4,7 @@ import { HORIZONS, horizonLabel } from "../domain/goals";
 import { useStore } from "../store";
 import { DEFAULT_TIME, ensurePermission, REMIND_OPTIONS, reminderFor, reminderKey, type RemindKey } from "../tasks/reminders";
 import { isDesktopApp } from "../data";
+import { quadrantInfo, quadrantOf } from "../tasks/matrix";
 import { Icons } from "./Icons";
 import { TagPicker } from "./TagPicker";
 
@@ -74,6 +75,16 @@ export function TaskEditor({ task, onClose }: { task: Task; onClose: () => void 
               {d.dueDate && <button type="button" className="linkbtn" onClick={() => update({ dueDate: null, dueTime: null })}>No date</button>}
             </div>
             <span className="hint">Tasks with a date show on that day in Today and the calendar.</span>
+          </div>
+          <div className="field">
+            <span className="label">Priority</span>
+            <div className="seg">
+              <button type="button" aria-pressed={!!d.important} onClick={() => update({ important: !d.important, urgent: !!d.urgent })}>Important</button>
+              <button type="button" aria-pressed={!!d.urgent} onClick={() => update({ urgent: !d.urgent, important: !!d.important })}>Urgent</button>
+            </div>
+            <span className="hint">
+              {quadrantOf(d) ? `In the Eisenhower matrix under ${quadrantInfo(quadrantOf(d)!).title}.` : "Not placed in the Eisenhower matrix yet."}
+            </span>
           </div>
           <div className="field">
             <label className="label" htmlFor="task-remind">Reminder</label>

@@ -9,18 +9,23 @@ import com.gmontemayor96.identity.R
 
 class WidgetListService : RemoteViewsService() {
   override fun onGetViewFactory(intent: Intent): RemoteViewsFactory =
-    RowsFactory(applicationContext, intent.getStringExtra(Widgets.EXTRA_KIND) ?: Widgets.TODAY)
+    RowsFactory(applicationContext, intent.getStringExtra(Widgets.EXTRA_KIND) ?: Widgets.TODAY, intent.getStringExtra(Widgets.EXTRA_QUADRANT))
 }
 
-private class RowsFactory(private val context: Context, private val kind: String) : RemoteViewsService.RemoteViewsFactory {
+private class RowsFactory(private val context: Context, private val kind: String, private val quadrant: String?) : RemoteViewsService.RemoteViewsFactory {
   private var rows: List<Row> = emptyList()
 
   override fun onCreate() {}
   override fun onDestroy() {}
 
   override fun onDataSetChanged() {
-    rows = runCatching { if (kind == Widgets.TODAY) WidgetData.today(context)?.rows else WidgetData.goals(context) }.getOrNull()
-      ?: listOf(Row.Empty(context.getString(R.string.widget_no_data)))
+    rows = runCatching {
+      when (kind) {
+        Widgets.TODAY -> WidgetData.today(context)?.rows
+        Widgets.MATRIX -> WidgetData.matrix(context, quadrant ?: "do")
+        else -> WidgetData.goals(context)
+      }
+    }.getOrNull() ?: listOf(Row.Empty(context.getString(R.string.widget_no_data)))
   }
 
   override fun getCount() = rows.size
@@ -39,7 +44,7 @@ private class RowsFactory(private val context: Context, private val kind: String
       }
       is Row.Empty -> RemoteViews(context.packageName, R.layout.widget_row_empty).apply {
         setTextViewText(R.id.row_title, row.text)
-        setOnClickFillInIntent(R.id.row_title, Intent().putExtra(Widgets.EXTRA_OP, "open").putExtra(Widgets.EXTRA_VIEW, if (kind == Widgets.TODAY) "day" else "goals"))
+        setOnClickFillInIntent(R.id.row_title, Intent().putExtra(Widgets.EXTRA_OP, "open").putExtra(Widgets.EXTRA_VIEW, Widgets.viewFor(kind)))
       }
       is Row.Item -> RemoteViews(context.packageName, R.layout.widget_row_item).apply {
         setTextViewText(R.id.row_title, row.title)
@@ -54,7 +59,7 @@ private class RowsFactory(private val context: Context, private val kind: String
           setViewVisibility(R.id.row_dot, View.GONE)
         }
         val fill = if (row.toggleable) Intent().putExtra(Widgets.EXTRA_OP, "toggle_${row.kind}").putExtra(Widgets.EXTRA_ID, row.id)
-        else Intent().putExtra(Widgets.EXTRA_OP, "open").putExtra(Widgets.EXTRA_VIEW, "day")
+        else Intent().putExtra(Widgets.EXTRA_OP, "open").putExtra(Widgets.EXTRA_VIEW, Widgets.viewFor(kind))
         setOnClickFillInIntent(R.id.row_root, fill)
       }
       is Row.GoalRow -> RemoteViews(context.packageName, R.layout.widget_row_goal).apply {

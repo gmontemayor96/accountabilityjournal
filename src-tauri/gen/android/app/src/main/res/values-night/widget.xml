@@ -6,4 +6,9 @@
     <color name="widget_line">#FF2C3833</color>
     <color name="widget_accent">#FF72C4A7</color>
     <color name="widget_accent_fg">#FF0E1A15</color>
+    <color name="widget_quad">#FF1E2723</color>
+    <color name="widget_q_do">#FFE88AA6</color>
+    <color name="widget_q_schedule">#FF7DB3EA</color>
+    <color name="widget_q_delegate">#FFE3B867</color>
+    <color name="widget_q_drop">#FF9AA7A2</color>
 </resources>
