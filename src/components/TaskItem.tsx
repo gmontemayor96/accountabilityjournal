@@ -1,5 +1,6 @@
 import type { Task } from "../domain/model";
 import { blankTask, useStore } from "../store";
+import { localStamp, reminderFor } from "../tasks/reminders";
 import { dueLabel, groupOf } from "../tasks/taskDates";
 import { Icons } from "./Icons";
 
@@ -32,7 +33,7 @@ export function TaskItem({ task }: { task: Task }) {
 
 /** A one-line field that adds a task on Enter, due on `dueDate` when given. */
 export function QuickAddTask({ dueDate, placeholder = "Add a task" }: { dueDate: string | null; placeholder?: string }) {
-  const { saveTask } = useStore();
+  const { saveTask, notify } = useStore();
   return (
     <input
       type="text"
@@ -43,7 +44,8 @@ export function QuickAddTask({ dueDate, placeholder = "Add a task" }: { dueDate:
         const input = e.currentTarget;
         const title = input.value.trim();
         if (e.key !== "Enter" || !title) return;
-        await saveTask({ ...blankTask(dueDate), title });
+        const remindAt = reminderFor(notify.taskDefault, dueDate, null);
+        await saveTask({ ...blankTask(dueDate), title, remindAt: remindAt && remindAt > localStamp(new Date()) ? remindAt : null });
         input.value = "";
       }}
     />

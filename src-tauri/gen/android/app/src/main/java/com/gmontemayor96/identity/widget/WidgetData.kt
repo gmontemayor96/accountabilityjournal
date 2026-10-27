@@ -1,8 +1,14 @@
 package com.gmontemayor96.identity.widget
 
+import android.app.AlarmManager
+import android.app.PendingIntent
+import android.content.ComponentName
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.database.sqlite.SQLiteDatabase
+import android.os.Build
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
@@ -203,6 +209,7 @@ object WidgetData {
         else Triple(true, !c.isNull(0), (c.getString(1) ?: "").isNotEmpty() || (c.getString(2) ?: "{}") != "{}")
       }
       val (exists, ticked, hasNotes) = state
+      if (!ticked) cancelReminders(context, habitId, today, reminderTimes(db, habitId))
       db.beginTransaction()
       try {
         when {
@@ -229,5 +236,39 @@ object WidgetData {
         db.endTransaction()
       }
     }
+  }
+
+  /** The habit's reminder times ("HH:MM"), from the JSON in habit.reminders. */
+  private fun reminderTimes(db: SQLiteDatabase, habitId: String): List<String> = try {
+    db.rawQuery("SELECT reminders FROM habit WHERE id = ?", arrayOf(habitId)).use { c ->
+      if (!c.moveToFirst()) emptyList()
+      else JSONArray(c.getString(0) ?: "[]").let { a -> (0 until a.length()).map { a.optString(it) } }
+    }
+  } catch (e: Exception) {
+    emptyList()
+  }
+
+  /**
+   * Cancels a habit's reminders for a day once it's ticked here, so they don't nag about something done.
+   * The app schedules them through tauri-plugin-notification: an alarm per notification id, aimed at the
+   * plugin's TimedNotificationPublisher, plus a saved copy it restores after a reboot. The id matches
+   * habitNotificationId in src/tasks/habitReminders.ts.
+   */
+  private fun cancelReminders(context: Context, habitId: String, date: String, times: List<String>) {
+    if (times.isEmpty()) return
+    val alarms = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    val saved = context.getSharedPreferences("NOTIFICATION_STORE", Context.MODE_PRIVATE).edit()
+    val flags = PendingIntent.FLAG_NO_CREATE or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
+    for (time in times) {
+      val id = ("$habitId@${date}T$time").hashCode() and 0x7fffffff
+      val notificationId = if (id == 0) 1 else id
+      val intent = Intent().setComponent(ComponentName(context, "app.tauri.notification.TimedNotificationPublisher"))
+      PendingIntent.getBroadcast(context, notificationId, intent, flags)?.let {
+        alarms.cancel(it)
+        it.cancel()
+      }
+      saved.remove(notificationId.toString())
+    }
+    saved.apply()
   }
 }

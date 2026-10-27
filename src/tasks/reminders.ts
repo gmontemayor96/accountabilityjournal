@@ -1,6 +1,7 @@
 import { addDays, toKey } from "../domain/dates";
 import type { Task } from "../domain/model";
 import { isAndroid } from "../sync/io";
+import { habitBody, habitNotificationId, type HabitReminder } from "./habitReminders";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -51,11 +52,14 @@ export function dueReminders(tasks: Task[], now: Date, sent: Set<string>): Task[
 }
 export const sentKey = (t: Task) => `${t.id}@${t.remindAt}`;
 
-/** Android notification ids are 32-bit ints; derive a stable one from the task id. */
-export function notificationId(taskId: string): number {
+/**
+ * Android notification ids are 32-bit ints; derive a stable, positive one from a string.
+ * Same as Java's String.hashCode() with the sign bit cleared, so the widget can work it out too.
+ */
+export function notificationId(key: string): number {
   let h = 0;
-  for (let i = 0; i < taskId.length; i++) h = (Math.imul(h, 31) + taskId.charCodeAt(i)) | 0;
-  return Math.abs(h) || 1;
+  for (let i = 0; i < key.length; i++) h = (Math.imul(h, 31) + key.charCodeAt(i)) | 0;
+  return h & 0x7fffffff || 1;
 }
 
 const body = (t: Task) => (t.dueDate ? `Due ${t.dueDate}${t.dueTime ? ` at ${t.dueTime}` : ""}` : "Task reminder");
@@ -66,25 +70,36 @@ export async function ensurePermission(): Promise<boolean> {
   return (await n.requestPermission()) === "granted";
 }
 
+/** Android keeps at most 500 alarms per app; stay well under it, keeping the soonest. */
+const MAX_SCHEDULED = 300;
+
 /**
- * Keeps reminders in step with the task list. Android schedules them with the system, so they fire
+ * Keeps reminders in step with tasks and habits. Android schedules them with the system, so they fire
  * with the app closed. The desktop app shows them itself while it is running (checked every 30 s).
  */
-export async function scheduleAndroid(tasks: Task[]): Promise<void> {
+export async function scheduleAndroid(tasks: Task[], habits: HabitReminder[]): Promise<void> {
   const n = await import("@tauri-apps/plugin-notification");
   if (!(await n.isPermissionGranted())) return;
   await n.cancelAll();
   const now = localStamp(new Date());
-  for (const t of tasks) {
-    if (t.doneAt || !t.remindAt || t.remindAt <= now) continue;
-    n.sendNotification({ id: notificationId(t.id), title: t.title, body: body(t), schedule: n.Schedule.at(parseStamp(t.remindAt), false, true) });
+  const all = [
+    ...tasks
+      .filter((t) => !t.doneAt && t.remindAt && t.remindAt > now)
+      .map((t) => ({ at: t.remindAt!, id: notificationId(t.id), title: t.title, body: body(t) })),
+    ...habits.map((r) => ({ at: r.at, id: habitNotificationId(r), title: r.habit.name, body: habitBody(r) })),
+  ].sort((a, b) => a.at.localeCompare(b.at));
+  for (const r of all.slice(0, MAX_SCHEDULED)) {
+    n.sendNotification({ id: r.id, title: r.title, body: r.body, schedule: n.Schedule.at(parseStamp(r.at), false, true) });
   }
 }
 
-export async function showNow(t: Task): Promise<void> {
+export async function show(title: string, text: string): Promise<void> {
   const n = await import("@tauri-apps/plugin-notification");
   if (!(await n.isPermissionGranted())) return;
-  n.sendNotification({ title: t.title, body: body(t) });
+  n.sendNotification({ title, body: text });
 }
+
+export const showNow = (t: Task) => show(t.title, body(t));
+export const showHabitNow = (r: HabitReminder) => show(r.habit.name, habitBody(r));
 
 export const remindersScheduledBySystem = isAndroid;

@@ -196,6 +196,7 @@ describe("sync", () => {
     db.exec(migration("002_sync.sql"));
     db.exec(migration("003_tasks.sql"));
     db.exec(migration("004_goals.sql"));
+    db.exec(migration("005_habit_reminders.sql"));
     const snap = await new SqliteRepo(driverFor(db)).snapshot();
     expect(snap.habits[0].updatedAt).toBe("2026-01-01T00:00:00Z");
     expect(snap.entries[0].updatedAt).toBe("2026-01-02T09:00:00Z");

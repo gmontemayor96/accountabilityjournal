@@ -40,6 +40,7 @@ export function HabitsScreen({ onEditHabit }: { onEditHabit: (h?: Habit) => void
                 <div className="inline">
                   <span className="badge">{type.label}{h.target ? ` · ${h.target} ${h.unit}` : ""}</span>
                   <span className="badge">{describeSchedule(h.schedule)}</span>
+                  {!!h.reminders?.length && <span className="badge" title="Reminders">{Icons.bell} {h.reminders.join(", ")}</span>}
                   {h.tags.map((id) => tag(id)).filter(Boolean).map((t) => (
                     <span key={t!.id} className="chip"><span className="dot" style={{ background: t!.color }} />{t!.name}</span>
                   ))}

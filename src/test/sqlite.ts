@@ -21,5 +21,6 @@ export function memoryDriver(): SqlDriver {
   db.exec(migration("002_sync.sql"));
   db.exec(migration("003_tasks.sql"));
   db.exec(migration("004_goals.sql"));
+  db.exec(migration("005_habit_reminders.sql"));
   return driverFor(db);
 }
